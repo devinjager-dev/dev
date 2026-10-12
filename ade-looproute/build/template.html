@@ -1,0 +1,947 @@
+<title>ADE Looproute Vrijdag</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/*__LEAFLET_CSS__*/
+</style>
+<style>
+/* Layout: two-pane planner. Route sheet on the left, city plan on the right; on phones the plan sits above the sheet. */
+:root {
+  --bg: #ECEFEE;
+  --surface: #FFFFFF;
+  --ink: #14181E;
+  --muted: #5A616E;
+  --rule: #D7DCDD;
+  --accent: #CF1820;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #FBE4E3;
+  --warn: #9A5300;
+  --warn-soft: #FCEFD9;
+  --idle: #8A93A0;
+  --map-land: #EAEBE5;
+  --map-water: #B5CCD8;
+  --map-water-label: #4F7487;
+  --map-green: #D3E1C6;
+  --map-street: #FFFFFF;
+  --map-casing: #D2D3CB;
+  --map-major: #FFFFFF;
+  --map-major-casing: #BDBFB6;
+  --map-foot: #D6D5CC;
+  --map-rail: #A3A6A0;
+  --map-label: #5E6570;
+  --map-halo: #EAEBE5;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1015; --surface: #151920; --ink: #E7EAEF; --muted: #97A0AE; --rule: #283039;
+    --accent: #E8353C; --accent-ink: #FFFFFF; --accent-soft: #3A1518;
+    --warn: #F0A63A; --warn-soft: #30230F; --idle: #6E7785;
+    --map-land: #12161C; --map-water: #1B3140; --map-water-label: #6E98AD; --map-green: #15231B;
+    --map-street: #2A303A; --map-casing: #12161C; --map-major: #3A414D; --map-major-casing: #0E1116;
+    --map-foot: #252B34; --map-rail: #3B414B; --map-label: #8D96A4; --map-halo: #12161C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1015; --surface: #151920; --ink: #E7EAEF; --muted: #97A0AE; --rule: #283039;
+  --accent: #E8353C; --accent-ink: #FFFFFF; --accent-soft: #3A1518;
+  --warn: #F0A63A; --warn-soft: #30230F; --idle: #6E7785;
+  --map-land: #12161C; --map-water: #1B3140; --map-water-label: #6E98AD; --map-green: #15231B;
+  --map-street: #2A303A; --map-casing: #12161C; --map-major: #3A414D; --map-major-casing: #0E1116;
+  --map-foot: #252B34; --map-rail: #3B414B; --map-label: #8D96A4; --map-halo: #12161C;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.app {
+  box-sizing: border-box;
+  height: 100%;
+  padding-block: 16px;
+  padding-inline: 16px;
+  display: grid;
+  grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+  gap: 16px;
+}
+.sheet {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+.plan {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--rule);
+}
+#map { position: absolute; inset: 0; background: var(--map-land); font-family: var(--font-body); }
+
+/* ---------- header ---------- */
+.masthead { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.xxx { color: var(--accent); font-family: var(--font-display); font-weight: 800; font-stretch: 75%; letter-spacing: 0.02em; font-size: 13px; }
+h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.lede { margin: 0; color: var(--muted); max-width: 60ch; }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-block: 1px solid var(--rule); }
+.stat { padding-block: 10px; padding-inline: 10px; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--rule); min-width: 0; }
+.stat:first-child { border-left: 0; padding-left: 0; }
+.stat b {
+  font-family: var(--font-display); font-stretch: 75%; font-weight: 700; font-size: 26px; line-height: 1;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.stat span { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+
+.controls { display: flex; flex-direction: column; gap: 10px; }
+.control-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.control-label { font-size: 12px; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button {
+  font: 500 13px/1 var(--font-mono); color: var(--ink); background: transparent; border: 0;
+  padding: 8px 11px; cursor: pointer; border-left: 1px solid var(--rule);
+}
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 500 13px/1 var(--font-body); color: var(--ink); text-decoration: none;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 9px 12px; cursor: pointer;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.06); }
+button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* ---------- notices ---------- */
+.notice { border: 1px dashed var(--muted); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
+.notice h2, .assume summary {
+  margin: 0; font-family: var(--font-display); font-stretch: 80%; font-weight: 700; font-size: 15px;
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.notice ul, .assume ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.notice li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; }
+.notice .t { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.notice p, .assume p { margin: 0; color: var(--muted); font-size: 12.5px; }
+.assume { border-top: 1px solid var(--rule); padding-top: 12px; }
+.assume summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+.assume summary::-webkit-details-marker { display: none; }
+.assume summary::after { content: "+"; font-family: var(--font-mono); color: var(--muted); }
+.assume[open] summary::after { content: "−"; }
+.assume ul { margin-top: 10px; }
+.assume li { font-size: 13px; padding-left: 12px; border-left: 2px solid var(--warn); }
+.assume li b { font-weight: 600; }
+.assume a { color: inherit; }
+
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); }
+.tab {
+  font: 600 13px/1 var(--font-body); color: var(--muted); background: none; border: 0; cursor: pointer;
+  padding: 10px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* ---------- route timeline ---------- */
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.stop {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: start;
+  width: 100%; text-align: left; background: none; border: 0; color: inherit; font: inherit;
+  padding: 8px 6px; border-radius: 8px; cursor: pointer;
+}
+.stop:hover, .stop.is-hot { background: var(--surface); }
+.badge {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent); color: var(--accent-ink);
+  font: 700 13px/1 var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.badge.inferred { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--warn); }
+.stop-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stop-time { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stop-title { font-weight: 600; font-size: 14.5px; line-height: 1.25; overflow-wrap: anywhere; }
+.stop-meta { color: var(--muted); font-size: 12.5px; }
+.flag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--warn); margin-left: 4px; }
+.leg {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center;
+  padding: 2px 6px; min-height: 30px;
+}
+.leg-rail { justify-self: center; width: 0; height: 100%; min-height: 26px; border-left: 2px dotted var(--accent); }
+.leg.long .leg-rail { border-left-color: var(--warn); }
+.leg.same .leg-rail { border-left-style: solid; border-left-color: var(--rule); }
+.leg-text { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.leg-text b { color: var(--ink); font-weight: 600; font-family: var(--font-mono); font-size: 12px; }
+.leg.long .leg-text b { color: var(--warn); }
+.leg-text a { color: var(--ink); font-size: 12px; text-underline-offset: 2px; }
+.idle { color: var(--idle); font-style: italic; }
+.empty { color: var(--muted); padding: 12px 0; }
+
+/* ---------- program list ---------- */
+.prog { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.prog li { border-top: 1px solid var(--rule); }
+.prog li:first-child { border-top: 0; }
+.prog label {
+  display: grid; grid-template-columns: 22px 92px minmax(0, 1fr); gap: 8px; align-items: start;
+  padding: 10px 2px; cursor: pointer;
+}
+.prog label.disabled { cursor: default; }
+.prog input { margin: 2px 0 0; width: 16px; height: 16px; accent-color: var(--accent); }
+.prog .t { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.prog .name { font-weight: 600; overflow-wrap: anywhere; }
+.prog .sub { color: var(--muted); font-size: 12.5px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 3px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; font: 600 11px/1 var(--font-body);
+  padding: 4px 7px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent;
+}
+.chip.in { background: var(--accent-soft); color: var(--accent); }
+.chip.out { background: var(--warn-soft); color: var(--warn); }
+.chip.off { border-color: var(--rule); color: var(--muted); }
+.chip.missing { border: 1px dashed var(--muted); color: var(--muted); }
+.chip.guess { border: 1px dashed var(--warn); color: var(--warn); }
+.saving { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+
+.foot { font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 12px; margin-top: auto; }
+.foot a { color: inherit; }
+
+/* ---------- map: pins, tags, labels ---------- */
+.leaflet-container { background: var(--map-land); font: inherit; }
+.leaflet-control-zoom a, .leaflet-bar a { background: var(--surface); color: var(--ink); border-color: var(--rule); }
+.leaflet-bar { border: 1px solid var(--rule) !important; box-shadow: none !important; }
+.leaflet-control-attribution { background: color-mix(in srgb, var(--surface) 85%, transparent) !important; color: var(--muted); font-size: 10.5px; }
+.leaflet-control-attribution a { color: var(--ink); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--ink); box-shadow: 0 6px 24px rgba(0,0,0,.22); }
+.leaflet-popup-content-wrapper { border-radius: 12px; border: 1px solid var(--rule); }
+.leaflet-popup-content { margin: 14px 16px; font-family: var(--font-body); font-size: 13px; line-height: 1.45; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+
+.pins { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); display: flex; gap: 3px; }
+.pin {
+  width: 30px; height: 30px; border-radius: 50%; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  font: 700 13px/1 var(--font-mono); font-variant-numeric: tabular-nums;
+  background: var(--accent); color: var(--accent-ink);
+  border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  transition: transform .15s ease;
+}
+.pin:hover, .pin.is-hot { transform: scale(1.18); }
+.pin.inferred { outline: 2px dashed var(--warn); outline-offset: 2px; }
+.pin.out { background: var(--surface); color: var(--warn); border-color: var(--warn); }
+.pin.off { background: var(--surface); color: var(--muted); border-color: var(--muted); }
+.tag {
+  position: absolute; top: 0; white-space: nowrap; pointer-events: auto; cursor: pointer;
+  font-family: var(--font-display); font-stretch: 78%; font-weight: 700; font-size: 13px; letter-spacing: .01em;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--rule);
+  padding: 3px 7px 4px; border-radius: 6px; line-height: 1.1;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+.tag small { display: block; font-family: var(--font-mono); font-stretch: normal; font-weight: 500; font-size: 10.5px; color: var(--muted); }
+.tag.right { left: var(--half, 18px); transform: translate(8px, -50%); }
+.tag.left { right: var(--half, 18px); transform: translate(-8px, -50%); }
+.tag.bottom { left: 0; top: 22px; transform: translate(-50%, 0); text-align: center; }
+.tag.top { left: 0; top: -22px; transform: translate(-50%, -100%); text-align: center; }
+.tag.dim { opacity: .72; }
+.hide-tags .tag { display: none; }
+
+.lm { pointer-events: none; }
+.lm span {
+  position: absolute; transform: translate(-50%, -50%); white-space: nowrap;
+  font: 600 10.5px/1 var(--font-body); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--map-label);
+  text-shadow: 0 0 3px var(--map-halo), 0 0 3px var(--map-halo), 0 0 6px var(--map-halo);
+}
+.lm.water span { font-style: italic; letter-spacing: .2em; color: var(--map-water-label); text-shadow: none; font-size: 12px; }
+.hide-lm .lm { display: none; }
+
+.leg-label { pointer-events: none; }
+.leg-label span {
+  position: absolute; transform: translate(-50%, -50%); white-space: nowrap;
+  font: 600 11px/1 var(--font-mono); color: var(--accent); background: var(--surface);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 3px 6px;
+}
+.leg-label.long span { color: var(--warn); border-color: var(--warn); border-style: dashed; }
+.hide-legs .leg-label { display: none; }
+
+.legend {
+  position: absolute; left: 10px; bottom: 26px; z-index: 500;
+  background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; color: var(--muted);
+}
+.legend div { display: flex; align-items: center; gap: 8px; }
+.lg-line { width: 22px; height: 0; border-top: 3px solid var(--accent); }
+.lg-line.long { border-top: 3px dotted var(--warn); }
+.lg-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+.lg-dot.out { background: var(--surface); border: 2px solid var(--warn); width: 8px; height: 8px; }
+.lg-dot.guess { background: transparent; outline: 2px dashed var(--warn); width: 8px; height: 8px; }
+
+.pop { display: flex; flex-direction: column; gap: 6px; min-width: 210px; }
+.pop .ey { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.pop h3 { margin: 0; font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: 19px; line-height: 1.05; text-wrap: balance; }
+.pop .addr { color: var(--muted); }
+.pop .when { font-family: var(--font-mono); font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+.pop .when dt { color: var(--muted); }
+.pop .when dd { margin: 0; }
+.pop .note { font-size: 12px; padding: 6px 8px; border-radius: 6px; background: var(--warn-soft); color: var(--ink); }
+.pop .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.pop .acts a, .pop .acts button {
+  font: 500 12px/1 var(--font-body); color: var(--ink); background: var(--bg); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 7px 9px; cursor: pointer; text-decoration: none;
+}
+
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(300px, 52%) minmax(0, 1fr); }
+  .plan { order: -1; }
+  .sheet { padding-right: 0; }
+  h1 { font-size: 36px; }
+  .legend { display: none; }
+}
+@media (max-width: 420px) {
+  .stat b { font-size: 21px; }
+  .stat { padding-inline: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pin { transition: none; }
+}
+</style>
+
+<div class="app">
+  <aside class="sheet" aria-label="Route en programma">
+    <header class="masthead">
+      <div class="eyebrow"><span class="xxx" aria-hidden="true">×××</span> ADE 2026 · vrijdag 23 oktober</div>
+      <h1>Looproute</h1>
+      <p class="lede">Je agenda voor één ADE-dag op de kaart, in de volgorde met de minste loop- en wachttijd. Klik op een pin of stop voor details.</p>
+    </header>
+
+    <div class="stats" aria-live="polite">
+      <div class="stat"><b id="st-km">–</b><span>km lopen</span></div>
+      <div class="stat"><b id="st-min">–</b><span>looptijd</span></div>
+      <div class="stat"><b id="st-n">–</b><span>events</span></div>
+      <div class="stat"><b id="st-end">–</b><span>laatste stop</span></div>
+    </div>
+
+    <div class="controls">
+      <div class="control-row">
+        <span class="control-label" id="stay-label">Minimaal per event</span>
+        <div class="seg" role="group" aria-labelledby="stay-label" id="stay">
+          <button type="button" data-stay="30" aria-pressed="false">30m</button>
+          <button type="button" data-stay="45" aria-pressed="true">45m</button>
+          <button type="button" data-stay="60" aria-pressed="false">60m</button>
+          <button type="button" data-stay="90" aria-pressed="false">90m</button>
+        </div>
+      </div>
+      <div class="btns">
+        <a class="btn primary" id="gmaps-all" href="#" target="_blank" rel="noopener">Route in Google Maps ↗</a>
+        <button class="btn" type="button" id="fit-all">Hele route</button>
+        <button class="btn" type="button" id="fit-center">Centrum</button>
+      </div>
+    </div>
+
+    <section class="notice" aria-labelledby="missing-h">
+      <h2 id="missing-h">Locatie ontbreekt (<span id="missing-n">0</span>)</h2>
+      <ul id="missing-list"></ul>
+      <p>Deze events staan niet op de kaart en tellen niet mee in de route. Online is ook geen adres gevonden. Met een adres kunnen ze erbij.</p>
+      <details class="assume" id="assume">
+        <summary><span>Aannames (<span id="assume-n">0</span>)</span></summary>
+        <ul id="assume-list"></ul>
+      </details>
+    </section>
+
+    <div>
+      <div class="tabs" role="tablist" aria-label="Weergave">
+        <button class="tab" role="tab" id="tab-route" aria-selected="true" aria-controls="panel-route">Route</button>
+        <button class="tab" role="tab" id="tab-prog" aria-selected="false" aria-controls="panel-prog">Programma (<span id="prog-n">0</span>)</button>
+      </div>
+      <div role="tabpanel" id="panel-route" aria-labelledby="tab-route">
+        <ol class="timeline" id="timeline"></ol>
+      </div>
+      <div role="tabpanel" id="panel-prog" aria-labelledby="tab-prog" hidden>
+        <ul class="prog" id="prog"></ul>
+      </div>
+    </div>
+
+    <p class="foot">
+      Volgorde: zoveel mogelijk events, dan zo min mogelijk lopen plus wachten. Looptijden zijn echte voetroutes (OSRM, OpenStreetMap), adressen uit de BAG.
+      Kaart: <a href="https://www.pdok.nl/" target="_blank" rel="noopener">Kadaster / PDOK TOP10NL</a>, CC BY 4.0.
+    </p>
+  </aside>
+
+  <main class="plan" aria-label="Kaart">
+    <div id="map"></div>
+    <div class="legend" aria-hidden="true">
+      <div><span class="lg-line"></span>Looproute</div>
+      <div><span class="lg-line long"></span>Lang stuk, overweeg tram of fiets</div>
+      <div><span class="lg-dot"></span>Stop in route</div>
+      <div><span class="lg-dot out"></span>Past niet of uitgezet</div>
+      <div><span class="lg-dot guess"></span>Adres afgeleid</div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const BASEMAP = /*__BASEMAP__*/null;
+const LEGS = /*__LEGS__*/null;
+</script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------- data ---------------- */
+  const LOCS = {
+    froda:     { tag: "FRODA'S",          addr: "De Clercqstraat 40H",    ll: [52.37125, 4.87104], side: "left" },
+    quattro:   { tag: "Quattro Gatti",    addr: "Hartenstraat 3",         ll: [52.37223, 4.88656], side: "top" },
+    hertz:     { tag: "50:HERTZ",         addr: "Halvemaansteeg 14",      ll: [52.36655, 4.89575], side: "right" },
+    stmpd:     { tag: "Garrix × STMPD",   addr: "Prins Hendrikkade 33",   ll: [52.37764, 4.89717], side: "right" },
+    bierfab:   { tag: "Bierfabriek",      addr: "Rokin 75",               ll: [52.37053, 4.89300], side: "right" },
+    chenin:    { tag: "Chenin Radio",     addr: "Hazenstraat 60C",        ll: [52.36998, 4.88026], side: "bottom" },
+    poeder:    { tag: "Poederbaas",       addr: "Duivendrechtsekade 80B", ll: [52.33784, 4.93324], side: "right" },
+    zwartgoud: { tag: "Zwart Goud",       addr: "Geldersekade 89",        ll: [52.37417, 4.90177], side: "right" },
+    tokyo:     { tag: "Tokyo After Dark", addr: "Reguliersdwarsstraat 44", ll: [52.36622, 4.89149], side: "left" }
+  };
+
+  const SRC_BNB = "https://www.iamsterdam.com/uit/agenda/nachtleven/clubbing/bnb-showcase-2026-canadian-take-over-friday-night";
+  const SRC_HERTZ = "https://www.iamsterdam.com/en/whats-on/calendar/nightlife/clubbing/groove-kitchen-live-at-50-hertz-house-and-techno-cafe-rembrandt-square-ade-2026";
+  const SRC_BEATPORT = "https://www.beatportal.com/articles/1625993-beatport-live-takes-over-zwart-goud-for-three-free-days-at-ade-2026";
+
+  // Exact titles, times and addresses as they appear in the calendar screenshot.
+  const EVENTS = [
+    { id: "froda",    title: "Boogie house pop-up FRODA'S",  start: "11:00", end: "17:00", loc: "froda" },
+    { id: "amnesia",  title: "Amnesia",                      start: "11:30", end: "12:30", loc: null },
+    { id: "quattro",  title: "ADE -popup - Quattro Gatti",   start: "12:00", end: "15:00", loc: "quattro" },
+    { id: "dirty",    title: "50:HERTZ - Dirty disco",       start: "14:00", end: "22:00", loc: "hertz" },
+    { id: "garrix",   title: "Martin Garrix X STMPD RCRDS",  start: "14:00", end: "15:00", loc: "stmpd",
+      assume: "Je agenda toont alleen de starttijd 14:00. Ik ga uit van een uur (tot 15:00), zoals het blok in je agenda." },
+    { id: "bierfab",  title: "Bierfabriek - Syntropy rsvp",  start: "15:00", end: "20:00", loc: "bierfab", inferred: true,
+      assume: "Geen adres in je agenda. Bierfabriek Amsterdam zit op Rokin 75 (achteringang Nes 67). Check de RSVP-mail voor de zekerheid." },
+    { id: "chenin",   title: "Chenin Radio",                 start: "15:00", end: "20:00", loc: "chenin" },
+    { id: "poeder",   title: "Poederbaas",                   start: "17:00", end: "23:00", loc: "poeder",
+      assume: "Ligt ver buiten het centrum (bij station Amstel). Lopen kost ruim een uur per richting." },
+    { id: "beatport", title: "Beatport",                     start: "17:00", end: "22:00", loc: "zwartgoud",
+      assume: "In je agenda staat Geldersekade 89s. De BAG kent geen 89s, dus ik gebruik Geldersekade 89: platenzaak Zwart Goud, waar !K7 vrijdag 17:00 tot 22:00 host.",
+      src: SRC_BEATPORT },
+    { id: "next",     title: "NEXTchapter - Prime",          start: "17:00", end: "21:00", loc: null },
+    { id: "bnb",      title: "50:HERTZ - BNB Showcase",      start: "22:00", end: "04:00", loc: "hertz", inferred: true,
+      assume: "Geen adres in je agenda. iAmsterdam zet de BNB Showcase op vrijdag 23 oktober 22:00 tot 04:00 bij 50:Hertz aan het Rembrandtplein, dezelfde zaak als Dirty disco (Halvemaansteeg 14).",
+      src: SRC_BNB, src2: SRC_HERTZ },
+    { id: "tokyo",    title: "Tokyo After Dark",             start: "22:00", end: "04:00", loc: "tokyo" }
+  ];
+  const toMin = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+  EVENTS.forEach((e) => {
+    e.s = toMin(e.start);
+    e.e = toMin(e.end);
+    if (e.e <= e.s) e.e += 24 * 60; // runs past midnight
+  });
+  const byId = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
+
+  /* ---------------- state ---------------- */
+  const STORE_KEY = "ade-looproute-v1";
+  let state = { stay: 45, off: [] };
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (saved && typeof saved.stay === "number" && Array.isArray(saved.off)) state = saved;
+  } catch (_) { /* storage unavailable */ }
+  const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {} };
+
+  /* ---------------- formatting ---------------- */
+  const pad = (n) => String(n).padStart(2, "0");
+  const fmt = (m) => { m = Math.round(m); return pad(Math.floor(m / 60) % 24) + ":" + pad(m % 60); };
+  const km = (m) => (m / 1000).toLocaleString("nl-NL", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " km";
+  const dur = (min) => {
+    min = Math.round(min);
+    if (min < 60) return min + " min";
+    return Math.floor(min / 60) + "u" + pad(min % 60);
+  };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  /* ---------------- walking legs ---------------- */
+  function leg(a, b) {
+    if (a === b) return { m: 0, min: 0, g: [] };
+    const k1 = a + "|" + b, k2 = b + "|" + a;
+    if (LEGS[k1]) return { m: LEGS[k1].m, min: LEGS[k1].s / 60, g: LEGS[k1].g };
+    const r = LEGS[k2];
+    return { m: r.m, min: r.s / 60, g: r.g.slice().reverse() };
+  }
+  const LONG_LEG_MIN = 25;
+
+  /* ---------------- route optimiser ----------------
+     Time windows: you arrive, wait for the opening if early, and must be able to stay
+     `stay` minutes (or the whole event if it is shorter) before it ends.
+     Objective, in order: most events, least walking + idle minutes, least metres.
+     Idle = time between an event ending and the next one starting that you cannot spend inside.
+     Exact search over (visited set, last stop) with Pareto pruning on (leave time, cost, metres). */
+  function popcount(x) { let c = 0; while (x) { x &= x - 1; c++; } return c; }
+  function solve(evs, stay) {
+    const n = evs.length;
+    if (!n) return { cnt: 0, cost: 0, dist: 0, path: [] };
+    const fronts = new Map();
+    let best = null;
+    const stack = [];
+    evs.forEach((ev, i) => stack.push([1 << i, i, ev.s + Math.min(stay, ev.e - ev.s), 0, 0, [i]]));
+    while (stack.length) {
+      const [mask, last, t, cost, dist, path] = stack.pop();
+      const key = mask * 32 + last;
+      let fr = fronts.get(key);
+      if (!fr) { fr = []; fronts.set(key, fr); }
+      if (fr.some((f) => f[0] <= t && f[1] <= cost + 1e-9 && f[2] <= dist)) continue;
+      for (let k = fr.length - 1; k >= 0; k--) if (t <= fr[k][0] && cost <= fr[k][1] + 1e-9 && dist <= fr[k][2]) fr.splice(k, 1);
+      fr.push([t, cost, dist]);
+      const cnt = popcount(mask);
+      if (!best || cnt > best.cnt || (cnt === best.cnt && (cost < best.cost - 1e-6 || (Math.abs(cost - best.cost) <= 1e-6 && dist < best.dist)))) {
+        best = { cnt, cost, dist, path };
+      }
+      const from = evs[last];
+      for (let j = 0; j < n; j++) {
+        if (mask & (1 << j)) continue;
+        const to = evs[j];
+        const lg = leg(from.loc, to.loc);
+        const st = Math.min(stay, to.e - to.s);
+        const begin = Math.max(t + lg.min, to.s);
+        if (begin + st > to.e) continue;
+        const idle = Math.max(0, to.s - (from.e + lg.min));
+        stack.push([mask | (1 << j), j, begin + st, cost + lg.min + idle, dist + lg.m, path.concat(j)]);
+      }
+    }
+    return best;
+  }
+
+  // Turn an order into a timetable. You leave each stop as late as still makes sense:
+  // when the next event opens, or when this one closes, whichever is first.
+  function timetable(evs, path, stay) {
+    const stops = [];
+    for (let k = 0; k < path.length; k++) {
+      const ev = evs[path[k]];
+      let arrive = ev.s, lg = null;
+      if (k > 0) {
+        const prev = stops[k - 1];
+        lg = leg(prev.ev.loc, ev.loc);
+        arrive = prev.depart + lg.min;
+      }
+      const begin = Math.max(arrive, ev.s);
+      const minLeave = begin + Math.min(stay, ev.e - ev.s);
+      let depart = ev.e;
+      if (k + 1 < path.length) {
+        const nx = evs[path[k + 1]];
+        const w = leg(ev.loc, nx.loc).min;
+        depart = Math.max(minLeave, Math.min(ev.e, nx.s - w));
+      }
+      stops.push({ ev, arrive, begin, depart, wait: Math.max(0, ev.s - arrive), legIn: lg });
+    }
+    return stops;
+  }
+
+  /* ---------------- compute ---------------- */
+  let plan = null;
+  function compute() {
+    const candidates = EVENTS.filter((e) => e.loc && !state.off.includes(e.id));
+    const best = solve(candidates, state.stay);
+    const stops = timetable(candidates, best.path, state.stay);
+    const order = {};
+    stops.forEach((s, i) => { order[s.ev.id] = i + 1; });
+    const walkMin = stops.reduce((a, s) => a + (s.legIn ? s.legIn.min : 0), 0);
+    // what each stop costs: re-solve without it
+    const saving = {};
+    stops.forEach((s) => {
+      const without = candidates.filter((e) => e.id !== s.ev.id);
+      const r = solve(without, state.stay);
+      saving[s.ev.id] = best.dist - r.dist;
+    });
+    plan = { candidates, best, stops, order, walkMin, saving };
+  }
+
+  /* ---------------- map ---------------- */
+  const REDUCED = (() => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (_) { return false; } })();
+  const css = () => getComputedStyle(document.documentElement);
+  const tok = (name) => css().getPropertyValue(name).trim();
+
+  const map = L.map("map", {
+    zoomControl: false, minZoom: 12, maxZoom: 18, zoomSnap: 0.25,
+    maxBounds: L.latLngBounds([52.318, 4.835], [52.398, 4.965]), maxBoundsViscosity: 0.8
+  });
+  L.control.zoom({ position: "topright" }).addTo(map);
+  map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+  map.attributionControl.addAttribution('Kaart © <a href="https://www.pdok.nl/" target="_blank" rel="noopener">Kadaster/PDOK</a> · routes © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>');
+
+  map.createPane("base"); map.getPane("base").style.zIndex = 250;
+  map.createPane("labels"); map.getPane("labels").style.zIndex = 380; map.getPane("labels").style.pointerEvents = "none";
+  map.createPane("route"); map.getPane("route").style.zIndex = 420;
+  map.createPane("legs"); map.getPane("legs").style.zIndex = 590; map.getPane("legs").style.pointerEvents = "none";
+  const baseR = L.canvas({ pane: "base", padding: 0.4 });
+  const routeR = L.canvas({ pane: "route", padding: 0.4 });
+
+  const flipLines = (lines) => lines.map((ln) => ln.map((p) => [p[1], p[0]]));
+  const flipPolys = (polys) => polys.map((rings) => rings.map((ring) => ring.map((p) => [p[1], p[0]])));
+  const B = {
+    green: L.polygon(flipPolys(BASEMAP.green), { renderer: baseR, interactive: false, stroke: false, fillOpacity: 1 }),
+    water: L.polygon(flipPolys(BASEMAP.water), { renderer: baseR, interactive: false, stroke: false, fillOpacity: 1 }),
+    foot: L.polyline(flipLines(BASEMAP.foot), { renderer: baseR, interactive: false, lineCap: "round", lineJoin: "round" }),
+    rail: L.polyline(flipLines(BASEMAP.rail), { renderer: baseR, interactive: false, dashArray: "6 5" }),
+    streetCase: L.polyline(flipLines(BASEMAP.street), { renderer: baseR, interactive: false, lineCap: "round", lineJoin: "round" }),
+    majorCase: L.polyline(flipLines(BASEMAP.major), { renderer: baseR, interactive: false, lineCap: "round", lineJoin: "round" }),
+    street: L.polyline(flipLines(BASEMAP.street), { renderer: baseR, interactive: false, lineCap: "round", lineJoin: "round" }),
+    major: L.polyline(flipLines(BASEMAP.major), { renderer: baseR, interactive: false, lineCap: "round", lineJoin: "round" })
+  };
+  ["green", "water", "foot", "rail", "streetCase", "majorCase", "street", "major"].forEach((k) => B[k].addTo(map));
+
+  function styleBase() {
+    const z = map.getZoom();
+    const sw = z < 13 ? 0.6 : z < 14 ? 1 : z < 15 ? 1.8 : z < 16 ? 3.2 : z < 17 ? 5.5 : 9;
+    const casing = z >= 14 ? 1.6 : 0;
+    B.green.setStyle({ fillColor: tok("--map-green") });
+    B.water.setStyle({ fillColor: tok("--map-water") });
+    B.foot.setStyle({ color: tok("--map-foot"), weight: Math.max(0.6, sw * 0.55) });
+    B.rail.setStyle({ color: tok("--map-rail"), weight: z < 14 ? 1 : 1.6 });
+    B.streetCase.setStyle({ color: tok("--map-casing"), weight: sw + casing, opacity: casing ? 1 : 0 });
+    B.majorCase.setStyle({ color: tok("--map-major-casing"), weight: sw * 1.5 + casing + 0.6, opacity: 1 });
+    B.street.setStyle({ color: tok("--map-street"), weight: sw });
+    B.major.setStyle({ color: tok("--map-major"), weight: sw * 1.5 });
+    const el = map.getContainer();
+    el.classList.toggle("hide-tags", z < 13);
+    el.classList.toggle("hide-lm", z < 12.75 || z > 16.5);
+    el.classList.toggle("hide-legs", z < 13);
+  }
+
+  // orientation labels
+  const LANDMARKS = [
+    ["Centraal Station", 52.3796, 4.9003], ["Dam", 52.3731, 4.8930], ["Leidseplein", 52.3637, 4.8826],
+    ["Nieuwmarkt", 52.3718, 4.9006], ["Jordaan", 52.3762, 4.8812], ["De Pijp", 52.3540, 4.8930],
+    ["Vondelpark", 52.3580, 4.8690], ["Oosterpark", 52.3602, 4.9205], ["Oud-West", 52.3650, 4.8690],
+    ["Station Amstel", 52.3462, 4.9178], ["Museumplein", 52.3575, 4.8820],
+    ["IJ", 52.3878, 4.8956, "water"], ["Amstel", 52.3530, 4.9090, "water"]
+  ];
+  LANDMARKS.forEach(([name, lat, lng, kind]) => {
+    L.marker([lat, lng], {
+      pane: "labels", interactive: false, keyboard: false,
+      icon: L.divIcon({ className: "lm" + (kind ? " " + kind : ""), html: "<span>" + esc(name) + "</span>", iconSize: [0, 0] })
+    }).addTo(map);
+  });
+
+  /* venue markers: one per location, one clickable pin per event */
+  const eventsAt = {};
+  EVENTS.forEach((e) => { if (e.loc) (eventsAt[e.loc] = eventsAt[e.loc] || []).push(e); });
+  const venueMarkers = {};
+  Object.keys(eventsAt).forEach((locId) => {
+    const m = L.marker(LOCS[locId].ll, { keyboard: false, riseOnHover: true, icon: L.divIcon({ className: "venue", iconSize: [0, 0] }) });
+    m.on("click", (ev) => {
+      const t = ev.originalEvent && ev.originalEvent.target;
+      const pinEl = t && t.closest ? t.closest("[data-ev]") : null;
+      openEvent(pinEl ? pinEl.getAttribute("data-ev") : eventsAt[locId][0].id, false);
+    });
+    m.addTo(map);
+    venueMarkers[locId] = m;
+  });
+
+  function pinState(e) {
+    if (state.off.includes(e.id)) return "off";
+    if (plan.order[e.id]) return "in";
+    return "out";
+  }
+  function drawVenues() {
+    Object.entries(eventsAt).forEach(([locId, evs]) => {
+      const L0 = LOCS[locId];
+      const pins = evs.map((e) => {
+        const st = pinState(e);
+        const label = st === "in" ? plan.order[e.id] : st === "off" ? "–" : "×";
+        const cls = ["pin", st === "in" ? "" : st, e.inferred ? "inferred" : ""].join(" ").trim();
+        const aria = esc(e.title) + ", " + e.start + " tot " + e.end + (st === "in" ? ", stop " + plan.order[e.id] : st === "off" ? ", uitgezet" : ", past niet in de route");
+        return '<button type="button" class="' + cls + '" data-ev="' + e.id + '" aria-label="' + aria + '">' + label + "</button>";
+      }).join("");
+      const half = (evs.length * 30 + (evs.length - 1) * 3) / 2;
+      const times = evs.map((e) => e.start + "–" + e.end).join(" · ");
+      const allOff = evs.every((e) => pinState(e) !== "in");
+      const tag = '<div class="tag ' + L0.side + (allOff ? " dim" : "") + '" data-ev="' + evs[0].id + '" style="--half:' + half + 'px">' +
+        esc(L0.tag) + "<small>" + times + "</small></div>";
+      venueMarkers[locId].setIcon(L.divIcon({ className: "venue", iconSize: [0, 0], html: '<div class="pins">' + pins + "</div>" + tag }));
+      venueMarkers[locId].setZIndexOffset(allOff ? 0 : 500);
+    });
+  }
+
+  /* route lines */
+  const routeLayer = L.layerGroup().addTo(map);
+  function drawRoute() {
+    routeLayer.clearLayers();
+    const accent = tok("--accent"), warn = tok("--warn"), halo = tok("--map-land");
+    plan.stops.forEach((s, i) => {
+      if (!s.legIn || !s.legIn.g.length) return;
+      const ll = s.legIn.g.map((p) => [p[1], p[0]]);
+      const long = s.legIn.min > LONG_LEG_MIN;
+      L.polyline(ll, { renderer: routeR, interactive: false, color: halo, weight: 9, opacity: 0.9, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
+      L.polyline(ll, {
+        renderer: routeR, interactive: false, color: long ? warn : accent, weight: long ? 4 : 4.5,
+        dashArray: long ? "1 9" : null, lineCap: "round", lineJoin: "round"
+      }).addTo(routeLayer);
+      if (s.legIn.m < 500) return; // short hops: the label would sit on the pins
+      const mid = ll[Math.floor(ll.length / 2)];
+      L.marker(mid, {
+        pane: "legs", interactive: false, keyboard: false,
+        icon: L.divIcon({ className: "leg-label" + (long ? " long" : ""), iconSize: [0, 0], html: "<span>" + Math.round(s.legIn.min) + " min</span>" })
+      }).addTo(routeLayer);
+    });
+  }
+
+  /* popups */
+  const gEvent = (e) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(LOCS[e.loc].addr + ", Amsterdam");
+  const gLeg = (a, b) => "https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=" + LOCS[a].ll.join(",") + "&destination=" + LOCS[b].ll.join(",");
+  function gRoute() {
+    const locs = [];
+    plan.stops.forEach((s) => { if (locs[locs.length - 1] !== s.ev.loc) locs.push(s.ev.loc); });
+    if (locs.length < 2) return locs.length ? "https://www.google.com/maps/search/?api=1&query=" + LOCS[locs[0]].ll.join(",") : "#";
+    const p = (id) => LOCS[id].ll.join(",");
+    let url = "https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=" + p(locs[0]) + "&destination=" + p(locs[locs.length - 1]);
+    const mid = locs.slice(1, -1);
+    if (mid.length) url += "&waypoints=" + mid.map(p).join("%7C");
+    return url;
+  }
+
+  function popupHtml(e) {
+    const st = pinState(e);
+    const n = plan.order[e.id];
+    const stop = n ? plan.stops[n - 1] : null;
+    let ey = st === "in" ? "Stop " + n + " van " + plan.stops.length : st === "off" ? "Uitgezet" : "Past niet in de route";
+    let h = '<div class="pop"><div class="ey">' + ey + "</div><h3>" + esc(e.title) + "</h3>";
+    h += '<div class="addr">' + esc(LOCS[e.loc].addr) + ", Amsterdam</div>";
+    h += '<dl class="when"><dt>Open</dt><dd>' + e.start + " – " + e.end + "</dd>";
+    if (stop) {
+      h += "<dt>Jij</dt><dd>" + fmt(stop.begin) + " – " + fmt(stop.depart) + "</dd>";
+      if (stop.legIn && stop.legIn.m) h += "<dt>Lopen</dt><dd>" + Math.round(stop.legIn.min) + " min · " + km(stop.legIn.m) + "</dd>";
+    }
+    h += "</dl>";
+    if (st === "out") h += '<div class="note">Met ' + state.stay + " min per event past dit niet tussen de andere stops. Zet een ander event uit of kies een kortere verblijfstijd.</div>";
+    if (e.assume) {
+      h += '<div class="note">' + esc(e.assume);
+      if (e.src) h += ' <a href="' + e.src + '" target="_blank" rel="noopener">Bron</a>';
+      if (e.src2) h += ' · <a href="' + e.src2 + '" target="_blank" rel="noopener">adres</a>';
+      h += "</div>";
+    }
+    h += '<div class="acts"><a href="' + gEvent(e) + '" target="_blank" rel="noopener">Google Maps ↗</a>';
+    if (stop && stop.legIn && stop.legIn.m) h += '<a href="' + gLeg(plan.stops[n - 2].ev.loc, e.loc) + '" target="_blank" rel="noopener">Loop hierheen ↗</a>';
+    h += '<button type="button" data-toggle="' + e.id + '">' + (st === "off" ? "Zet aan" : "Zet uit") + "</button></div></div>";
+    return h;
+  }
+
+  let openId = null;
+  const popup = L.popup({ maxWidth: 300, autoPanPadding: [24, 24], offset: [0, -14] });
+  map.on("popupclose", () => { openId = null; hot(null); });
+  function openEvent(id, fly) {
+    const e = byId[id];
+    if (!e || !e.loc) return;
+    openId = id;
+    const evs = eventsAt[e.loc];
+    const idx = evs.indexOf(e);
+    const dx = (idx - (evs.length - 1) / 2) * 33;
+    popup.options.offset = [dx, -14];
+    const ll = LOCS[e.loc].ll;
+    const show = () => { popup.setLatLng(ll).setContent(popupHtml(e)).openOn(map); openId = id; hot(id); };
+    const inView = map.getZoom() >= 14.5 && map.getBounds().pad(-0.15).contains(ll);
+    if (fly && !inView) {
+      map.once("moveend", show);
+      const target = Math.max(map.getZoom(), 15);
+      if (REDUCED) map.setView(ll, target, { animate: false }); else map.flyTo(ll, target, { duration: 0.6 });
+    } else show();
+  }
+  function hot(id) {
+    document.querySelectorAll(".is-hot").forEach((el) => el.classList.remove("is-hot"));
+    if (!id) return;
+    document.querySelectorAll('[data-ev="' + id + '"].pin, .stop[data-ev="' + id + '"]').forEach((el) => el.classList.add("is-hot"));
+  }
+  map.getContainer().addEventListener("click", (ev) => {
+    const b = ev.target.closest && ev.target.closest("[data-toggle]");
+    if (!b) return;
+    toggle(b.getAttribute("data-toggle"));
+  });
+
+  /* ---------------- sheet ---------------- */
+  const $ = (id) => document.getElementById(id);
+
+  function renderStatic() {
+    const missing = EVENTS.filter((e) => !e.loc);
+    $("missing-n").textContent = missing.length;
+    $("missing-list").innerHTML = missing.map((e) =>
+      '<li><span class="t">' + e.start + "–" + e.end + "</span><span><b>" + esc(e.title) + "</b></span></li>").join("");
+    const assumptions = [
+      { b: "Datum", t: "Je screenshot toont geen datum. De tijden van Beatport (!K7, 17:00–22:00) en BNB Showcase (22:00–04:00) matchen vrijdag 23 oktober 2026.", src: SRC_BEATPORT }
+    ].concat(EVENTS.filter((e) => e.assume).map((e) => ({ b: e.title, t: e.assume, src: e.src })));
+    $("assume-n").textContent = assumptions.length;
+    $("assume-list").innerHTML = assumptions.map((a) =>
+      "<li><b>" + esc(a.b) + ".</b> " + esc(a.t) + (a.src ? ' <a href="' + a.src + '" target="_blank" rel="noopener">Bron</a>' : "") + "</li>").join("");
+    $("prog-n").textContent = EVENTS.length;
+  }
+
+  function renderStats() {
+    const p = plan;
+    $("st-km").textContent = km(p.best.dist).replace(" km", "");
+    $("st-min").textContent = dur(p.walkMin);
+    const located = EVENTS.filter((e) => e.loc).length;
+    $("st-n").textContent = p.stops.length + "/" + located;
+    $("st-end").textContent = p.stops.length ? fmt(p.stops[p.stops.length - 1].begin) : "–";
+    $("gmaps-all").href = gRoute();
+  }
+
+  function renderTimeline() {
+    const p = plan;
+    if (!p.stops.length) {
+      $("timeline").innerHTML = '<li class="empty">Geen events geselecteerd. Zet er een paar aan in Programma.</li>';
+      return;
+    }
+    let h = "";
+    p.stops.forEach((s, i) => {
+      const e = s.ev;
+      if (s.legIn) {
+        const same = s.legIn.m === 0;
+        const long = s.legIn.min > LONG_LEG_MIN;
+        const prevLoc = p.stops[i - 1].ev.loc;
+        h += '<li class="leg' + (same ? " same" : "") + (long ? " long" : "") + '"><span class="leg-rail"></span><div class="leg-text">';
+        if (same) h += "<span>Zelfde locatie, je blijft hier</span>";
+        else {
+          h += "<span><b>" + Math.round(s.legIn.min) + " min</b> · " + km(s.legIn.m) + (long ? " · lang stuk, overweeg tram of fiets" : "") + "</span>";
+          h += '<a href="' + gLeg(prevLoc, e.loc) + '" target="_blank" rel="noopener">Navigeer ↗</a>';
+        }
+        if (s.wait >= 1) h += '<span class="idle">daarna ' + dur(s.wait) + " wachten tot de start</span>";
+        h += "</div></li>";
+      }
+      const last = i === p.stops.length - 1;
+      h += '<li><button type="button" class="stop" data-ev="' + e.id + '"><span class="badge' + (e.inferred ? " inferred" : "") + '">' + (i + 1) + "</span>";
+      h += '<span class="stop-body"><span class="stop-time">' + fmt(s.begin) + " – " + fmt(s.depart) + (last ? " (sluit)" : "") + "</span>";
+      h += '<span class="stop-title">' + esc(e.title) + "</span>";
+      h += '<span class="stop-meta">' + esc(LOCS[e.loc].addr) + " · open " + e.start + "–" + e.end +
+        (e.inferred ? '<span class="flag">adres afgeleid</span>' : "") + "</span></span></button></li>";
+    });
+    $("timeline").innerHTML = h;
+  }
+
+  function renderProgram() {
+    const p = plan;
+    $("prog").innerHTML = EVENTS.map((e) => {
+      const off = state.off.includes(e.id);
+      let chips = "";
+      if (!e.loc) chips += '<span class="chip missing">Locatie ontbreekt</span>';
+      else if (off) chips += '<span class="chip off">Uitgezet</span>';
+      else if (p.order[e.id]) chips += '<span class="chip in">Stop ' + p.order[e.id] + "</span>";
+      else chips += '<span class="chip out">Past niet in tijd</span>';
+      if (e.inferred) chips += '<span class="chip guess">Adres afgeleid</span>';
+      const sv = p.saving[e.id];
+      if (sv && sv > 50) chips += '<span class="saving">zonder: ' + km(sv) + " minder</span>";
+      const sub = e.loc ? esc(LOCS[e.loc].addr) : "Geen adres in je agenda";
+      return '<li><label class="' + (e.loc ? "" : "disabled") + '" for="ev-' + e.id + '">' +
+        '<input type="checkbox" id="ev-' + e.id + '" data-id="' + e.id + '"' + (e.loc && !off ? " checked" : "") + (e.loc ? "" : " disabled") + ">" +
+        '<span class="t">' + e.start + "–" + e.end + "</span>" +
+        '<span><span class="name">' + esc(e.title) + '</span><span class="sub">' + sub + "</span>" +
+        '<span class="sub">' + chips + "</span></span></label></li>";
+    }).join("");
+  }
+
+  function renderAll() {
+    compute();
+    renderStats();
+    renderTimeline();
+    renderProgram();
+    drawVenues();
+    drawRoute();
+    if (openId && byId[openId]) popup.setContent(popupHtml(byId[openId]));
+    hot(openId);
+  }
+
+  function toggle(id) {
+    const i = state.off.indexOf(id);
+    if (i >= 0) state.off.splice(i, 1); else state.off.push(id);
+    persist();
+    renderAll();
+  }
+
+  /* events */
+  $("stay").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-stay]");
+    if (!b) return;
+    state.stay = Number(b.getAttribute("data-stay"));
+    persist();
+    syncStay();
+    renderAll();
+  });
+  function syncStay() {
+    document.querySelectorAll("#stay [data-stay]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.getAttribute("data-stay")) === state.stay)));
+  }
+  $("timeline").addEventListener("click", (ev) => {
+    const b = ev.target.closest(".stop");
+    if (b) openEvent(b.getAttribute("data-ev"), true);
+  });
+  $("timeline").addEventListener("mouseover", (ev) => {
+    const b = ev.target.closest(".stop");
+    if (b && !openId) hot(b.getAttribute("data-ev"));
+  });
+  $("timeline").addEventListener("mouseleave", () => { if (!openId) hot(null); });
+  $("prog").addEventListener("change", (ev) => {
+    const id = ev.target.getAttribute("data-id");
+    if (id) toggle(id);
+  });
+  function selectTab(which) {
+    const route = which === "route";
+    $("tab-route").setAttribute("aria-selected", String(route));
+    $("tab-prog").setAttribute("aria-selected", String(!route));
+    $("panel-route").hidden = !route;
+    $("panel-prog").hidden = route;
+  }
+  $("tab-route").addEventListener("click", () => selectTab("route"));
+  $("tab-prog").addEventListener("click", () => selectTab("prog"));
+
+  function fitAll() {
+    const pts = (plan.stops.length ? plan.stops.map((s) => LOCS[s.ev.loc].ll) : Object.values(LOCS).map((l) => l.ll));
+    map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [48, 48], paddingBottomRight: [130, 40], maxZoom: 16 });
+  }
+  function fitCenter() {
+    const ids = ["froda", "quattro", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo"];
+    map.fitBounds(L.latLngBounds(ids.map((id) => LOCS[id].ll)), { paddingTopLeft: [70, 40], paddingBottomRight: [130, 40] });
+  }
+  $("fit-all").addEventListener("click", fitAll);
+  $("fit-center").addEventListener("click", fitCenter);
+
+  map.on("zoomend", styleBase);
+  const restyle = () => { styleBase(); drawRoute(); };
+  try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", restyle); } catch (_) {}
+  new MutationObserver(restyle).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  /* boot */
+  syncStay();
+  renderStatic();
+  compute();
+  fitAll();
+  styleBase();
+  renderAll();
+  setTimeout(() => map.invalidateSize(), 0);
+  window.addEventListener("resize", () => map.invalidateSize());
+})();
+</script>
