@@ -375,7 +375,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
     <section class="notice" aria-labelledby="missing-h">
       <h2 id="missing-h">Locatie ontbreekt (<span id="missing-n">0</span>)</h2>
       <ul id="missing-list"></ul>
-      <p>Deze events staan niet op de kaart en tellen niet mee in de route. Online is ook geen adres gevonden. Met een adres kunnen ze erbij.</p>
+      <p>Niet op de kaart en niet in de route. Online is ook geen adres gevonden. Met een adres kan het erbij.</p>
       <details class="assume" id="assume">
         <summary><span>Aannames (<span id="assume-n">0</span>)</span></summary>
         <ul id="assume-list"></ul>
@@ -432,7 +432,8 @@ const LEGS = /*__LEGS__*/null;
     chenin:    { tag: "Chenin Radio",     addr: "Hazenstraat 60C",        ll: [52.36998, 4.88026], side: "bottom" },
     poeder:    { tag: "Poederbaas",       addr: "Duivendrechtsekade 80B", ll: [52.33784, 4.93324], side: "right" },
     zwartgoud: { tag: "Zwart Goud",       addr: "Geldersekade 89",        ll: [52.37417, 4.90177], side: "right" },
-    tokyo:     { tag: "Tokyo After Dark", addr: "Reguliersdwarsstraat 44", ll: [52.36622, 4.89149], side: "left" }
+    tokyo:     { tag: "Tokyo After Dark", addr: "Reguliersdwarsstraat 44", ll: [52.36622, 4.89149], side: "left" },
+    prime:     { tag: "Club Prime",       addr: "Rembrandtplein 22",      ll: [52.36565, 4.89628], side: "bottom" }
   };
 
   const SRC_BNB = "https://www.iamsterdam.com/uit/agenda/nachtleven/clubbing/bnb-showcase-2026-canadian-take-over-friday-night";
@@ -455,7 +456,7 @@ const LEGS = /*__LEGS__*/null;
     { id: "beatport", title: "Beatport",                     start: "17:00", end: "22:00", loc: "zwartgoud",
       assume: "In je agenda staat Geldersekade 89s. De BAG kent geen 89s, dus ik gebruik Geldersekade 89: platenzaak Zwart Goud, waar !K7 vrijdag 17:00 tot 22:00 host.",
       src: SRC_BEATPORT },
-    { id: "next",     title: "NEXTchapter - Prime",          start: "17:00", end: "21:00", loc: null },
+    { id: "next",     title: "NEXTchapter - Prime",          start: "17:00", end: "21:00", loc: "prime" },
     { id: "bnb",      title: "50:HERTZ - BNB Showcase",      start: "22:00", end: "04:00", loc: "hertz", inferred: true,
       assume: "Geen adres in je agenda. iAmsterdam zet de BNB Showcase op vrijdag 23 oktober 22:00 tot 04:00 bij 50:Hertz aan het Rembrandtplein, dezelfde zaak als Dirty disco (Halvemaansteeg 14).",
       src: SRC_BNB, src2: SRC_HERTZ },
@@ -923,8 +924,8 @@ const LEGS = /*__LEGS__*/null;
     map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [48, 48], paddingBottomRight: [130, 40], maxZoom: 16 });
   }
   function fitCenter() {
-    const ids = ["froda", "quattro", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo"];
-    map.fitBounds(L.latLngBounds(ids.map((id) => LOCS[id].ll)), { paddingTopLeft: [70, 40], paddingBottomRight: [130, 40] });
+    const ids = ["froda", "quattro", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime"];
+    map.fitBounds(L.latLngBounds(ids.map((id) => LOCS[id].ll)), { paddingTopLeft: [110, 40], paddingBottomRight: [130, 40] });
   }
   $("fit-all").addEventListener("click", fitAll);
   $("fit-center").addEventListener("click", fitCenter);

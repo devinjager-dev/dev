@@ -11,10 +11,15 @@ LOCS = {
   "poeder":  (4.93324, 52.33784),  # Duivendrechtsekade 80B
   "zwartgoud": (4.90177, 52.37417),# Geldersekade 89
   "tokyo":   (4.89149, 52.36622),  # Reguliersdwarsstraat 44
+  "prime":   (4.89628, 52.36565),  # Rembrandtplein 22 (Club Prime)
 }
 ids = list(LOCS)
-legs = {}
+try:
+    legs = json.load(open(OUT))  # incremental: only route new pairs
+except (OSError, ValueError):
+    legs = {}
 for a, b in itertools.combinations(ids, 2):
+    if f"{a}|{b}" in legs or f"{b}|{a}" in legs: continue
     (x1, y1), (x2, y2) = LOCS[a], LOCS[b]
     url = f"https://routing.openstreetmap.de/routed-foot/route/v1/driving/{x1},{y1};{x2},{y2}?overview=full&geometries=geojson"
     for attempt in range(4):
