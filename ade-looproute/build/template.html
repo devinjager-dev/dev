@@ -138,6 +138,10 @@ h1 {
 }
 .seg button:first-child { border-left: 0; }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+#start {
+  font: 500 13px/1 var(--font-mono); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 8px; padding: 7px 10px; cursor: pointer;
+}
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
@@ -357,6 +361,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 
     <div class="controls">
       <div class="control-row">
+        <label class="control-label" for="start">Start om</label>
+        <select id="start">
+          <option value="600">10:00</option>
+          <option value="630">10:30</option>
+          <option value="660" selected>11:00</option>
+          <option value="690">11:30</option>
+          <option value="720">12:00</option>
+          <option value="750">12:30</option>
+          <option value="780">13:00</option>
+        </select>
+      </div>
+      <div class="control-row">
         <span class="control-label" id="stay-label">Minimaal per event</span>
         <div class="seg" role="group" aria-labelledby="stay-label" id="stay">
           <button type="button" data-stay="30" aria-pressed="false">30m</button>
@@ -446,8 +462,9 @@ const LEGS = /*__LEGS__*/null;
     { id: "amnesia",  title: "Amnesia",                      start: "11:30", end: "12:30", loc: null },
     { id: "quattro",  title: "ADE -popup - Quattro Gatti",   start: "12:00", end: "15:00", loc: "quattro" },
     { id: "dirty",    title: "50:HERTZ - Dirty disco",       start: "14:00", end: "22:00", loc: "hertz" },
-    { id: "garrix",   title: "Martin Garrix X STMPD RCRDS",  start: "14:00", end: "15:00", loc: "stmpd",
-      assume: "Je agenda toont alleen de starttijd 14:00. Ik ga uit van een uur (tot 15:00), zoals het blok in je agenda." },
+    { id: "garrix",   title: "Martin Garrix X STMPD RCRDS",  start: "00:00", end: "24:00", loc: "stmpd",
+      allDay: true, first: true, stay: 30,
+      assume: "Volgens jou de hele dag open, vlak bij Centraal Station. Daarom altijd de eerste stop. Jullie gaan er even langs; ik reken 30 minuten." },
     { id: "bierfab",  title: "Bierfabriek - Syntropy rsvp",  start: "15:00", end: "20:00", loc: "bierfab", inferred: true,
       assume: "Geen adres in je agenda. Bierfabriek Amsterdam zit op Rokin 75 (achteringang Nes 67). Check de RSVP-mail voor de zekerheid." },
     { id: "chenin",   title: "Chenin Radio",                 start: "15:00", end: "20:00", loc: "chenin" },
@@ -472,10 +489,10 @@ const LEGS = /*__LEGS__*/null;
 
   /* ---------------- state ---------------- */
   const STORE_KEY = "ade-looproute-v1";
-  let state = { stay: 45, off: [] };
+  let state = { stay: 45, off: [], start: 660 };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (saved && typeof saved.stay === "number" && Array.isArray(saved.off)) state = saved;
+    if (saved && typeof saved.stay === "number" && Array.isArray(saved.off)) state = Object.assign(state, saved);
   } catch (_) { /* storage unavailable */ }
   const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {} };
 
@@ -488,6 +505,7 @@ const LEGS = /*__LEGS__*/null;
     if (min < 60) return min + " min";
     return Math.floor(min / 60) + "u" + pad(min % 60);
   };
+  const win = (e, sep) => e.allDay ? "hele dag" : e.start + (sep || "–") + e.end;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   /* ---------------- walking legs ---------------- */
@@ -507,13 +525,21 @@ const LEGS = /*__LEGS__*/null;
      Idle = time between an event ending and the next one starting that you cannot spend inside.
      Exact search over (visited set, last stop) with Pareto pruning on (leave time, cost, metres). */
   function popcount(x) { let c = 0; while (x) { x &= x - 1; c++; } return c; }
-  function solve(evs, stay) {
+  // Minutes you need at an event: the global setting, capped by a per-event short visit and by the event itself.
+  const stayAt = (ev, stay) => Math.min(ev.stay ? Math.min(ev.stay, stay) : stay, ev.e - ev.s);
+  function solve(evs, stay, startAt) {
     const n = evs.length;
     if (!n) return { cnt: 0, cost: 0, dist: 0, path: [] };
     const fronts = new Map();
     let best = null;
     const stack = [];
-    evs.forEach((ev, i) => stack.push([1 << i, i, ev.s + Math.min(stay, ev.e - ev.s), 0, 0, [i]]));
+    const firstIdx = evs.findIndex((ev) => ev.first);
+    evs.forEach((ev, i) => {
+      if (firstIdx >= 0 && i !== firstIdx) return; // a fixed first stop
+      const begin = Math.max(startAt, ev.s);
+      if (begin + stayAt(ev, stay) <= ev.e) stack.push([1 << i, i, begin + stayAt(ev, stay), 0, 0, [i]]);
+    });
+    if (!stack.length) return { cnt: 0, cost: 0, dist: 0, path: [] };
     while (stack.length) {
       const [mask, last, t, cost, dist, path] = stack.pop();
       const key = mask * 32 + last;
@@ -531,7 +557,7 @@ const LEGS = /*__LEGS__*/null;
         if (mask & (1 << j)) continue;
         const to = evs[j];
         const lg = leg(from.loc, to.loc);
-        const st = Math.min(stay, to.e - to.s);
+        const st = stayAt(to, stay);
         const begin = Math.max(t + lg.min, to.s);
         if (begin + st > to.e) continue;
         const idle = Math.max(0, to.s - (from.e + lg.min));
@@ -543,18 +569,18 @@ const LEGS = /*__LEGS__*/null;
 
   // Turn an order into a timetable. You leave each stop as late as still makes sense:
   // when the next event opens, or when this one closes, whichever is first.
-  function timetable(evs, path, stay) {
+  function timetable(evs, path, stay, startAt) {
     const stops = [];
     for (let k = 0; k < path.length; k++) {
       const ev = evs[path[k]];
-      let arrive = ev.s, lg = null;
+      let arrive = Math.max(startAt, ev.s), lg = null;
       if (k > 0) {
         const prev = stops[k - 1];
         lg = leg(prev.ev.loc, ev.loc);
         arrive = prev.depart + lg.min;
       }
       const begin = Math.max(arrive, ev.s);
-      const minLeave = begin + Math.min(stay, ev.e - ev.s);
+      const minLeave = begin + stayAt(ev, stay);
       let depart = ev.e;
       if (k + 1 < path.length) {
         const nx = evs[path[k + 1]];
@@ -570,8 +596,8 @@ const LEGS = /*__LEGS__*/null;
   let plan = null;
   function compute() {
     const candidates = EVENTS.filter((e) => e.loc && !state.off.includes(e.id));
-    const best = solve(candidates, state.stay);
-    const stops = timetable(candidates, best.path, state.stay);
+    const best = solve(candidates, state.stay, state.start);
+    const stops = timetable(candidates, best.path, state.stay, state.start);
     const order = {};
     stops.forEach((s, i) => { order[s.ev.id] = i + 1; });
     const walkMin = stops.reduce((a, s) => a + (s.legIn ? s.legIn.min : 0), 0);
@@ -579,7 +605,7 @@ const LEGS = /*__LEGS__*/null;
     const saving = {};
     stops.forEach((s) => {
       const without = candidates.filter((e) => e.id !== s.ev.id);
-      const r = solve(without, state.stay);
+      const r = solve(without, state.stay, state.start);
       saving[s.ev.id] = best.dist - r.dist;
     });
     plan = { candidates, best, stops, order, walkMin, saving };
@@ -679,11 +705,11 @@ const LEGS = /*__LEGS__*/null;
         const st = pinState(e);
         const label = st === "in" ? plan.order[e.id] : st === "off" ? "–" : "×";
         const cls = ["pin", st === "in" ? "" : st, e.inferred ? "inferred" : ""].join(" ").trim();
-        const aria = esc(e.title) + ", " + e.start + " tot " + e.end + (st === "in" ? ", stop " + plan.order[e.id] : st === "off" ? ", uitgezet" : ", past niet in de route");
+        const aria = esc(e.title) + ", " + win(e, " tot ") + (st === "in" ? ", stop " + plan.order[e.id] : st === "off" ? ", uitgezet" : ", past niet in de route");
         return '<button type="button" class="' + cls + '" data-ev="' + e.id + '" aria-label="' + aria + '">' + label + "</button>";
       }).join("");
       const half = (evs.length * 30 + (evs.length - 1) * 3) / 2;
-      const times = evs.map((e) => e.start + "–" + e.end).join(" · ");
+      const times = evs.map((e) => win(e)).join(" · ");
       const allOff = evs.every((e) => pinState(e) !== "in");
       const tag = '<div class="tag ' + L0.side + (allOff ? " dim" : "") + '" data-ev="' + evs[0].id + '" style="--half:' + half + 'px">' +
         esc(L0.tag) + "<small>" + times + "</small></div>";
@@ -736,7 +762,7 @@ const LEGS = /*__LEGS__*/null;
     let ey = st === "in" ? "Stop " + n + " van " + plan.stops.length : st === "off" ? "Uitgezet" : "Past niet in de route";
     let h = '<div class="pop"><div class="ey">' + ey + "</div><h3>" + esc(e.title) + "</h3>";
     h += '<div class="addr">' + esc(LOCS[e.loc].addr) + ", Amsterdam</div>";
-    h += '<dl class="when"><dt>Open</dt><dd>' + e.start + " – " + e.end + "</dd>";
+    h += '<dl class="when"><dt>Open</dt><dd>' + win(e, " – ") + "</dd>";
     if (stop) {
       h += "<dt>Jij</dt><dd>" + fmt(stop.begin) + " – " + fmt(stop.depart) + "</dd>";
       if (stop.legIn && stop.legIn.m) h += "<dt>Lopen</dt><dd>" + Math.round(stop.legIn.min) + " min · " + km(stop.legIn.m) + "</dd>";
@@ -839,7 +865,7 @@ const LEGS = /*__LEGS__*/null;
       h += '<li><button type="button" class="stop" data-ev="' + e.id + '"><span class="badge' + (e.inferred ? " inferred" : "") + '">' + (i + 1) + "</span>";
       h += '<span class="stop-body"><span class="stop-time">' + fmt(s.begin) + " – " + fmt(s.depart) + (last ? " (sluit)" : "") + "</span>";
       h += '<span class="stop-title">' + esc(e.title) + "</span>";
-      h += '<span class="stop-meta">' + esc(LOCS[e.loc].addr) + " · open " + e.start + "–" + e.end +
+      h += '<span class="stop-meta">' + esc(LOCS[e.loc].addr) + " · open " + win(e) +
         (e.inferred ? '<span class="flag">adres afgeleid</span>' : "") + "</span></span></button></li>";
     });
     $("timeline").innerHTML = h;
@@ -860,7 +886,7 @@ const LEGS = /*__LEGS__*/null;
       const sub = e.loc ? esc(LOCS[e.loc].addr) : "Geen adres in je agenda";
       return '<li><label class="' + (e.loc ? "" : "disabled") + '" for="ev-' + e.id + '">' +
         '<input type="checkbox" id="ev-' + e.id + '" data-id="' + e.id + '"' + (e.loc && !off ? " checked" : "") + (e.loc ? "" : " disabled") + ">" +
-        '<span class="t">' + e.start + "–" + e.end + "</span>" +
+        '<span class="t">' + win(e) + "</span>" +
         '<span><span class="name">' + esc(e.title) + '</span><span class="sub">' + sub + "</span>" +
         '<span class="sub">' + chips + "</span></span></label></li>";
     }).join("");
@@ -896,6 +922,11 @@ const LEGS = /*__LEGS__*/null;
   function syncStay() {
     document.querySelectorAll("#stay [data-stay]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.getAttribute("data-stay")) === state.stay)));
   }
+  $("start").addEventListener("change", (ev) => {
+    state.start = Number(ev.target.value);
+    persist();
+    renderAll();
+  });
   $("timeline").addEventListener("click", (ev) => {
     const b = ev.target.closest(".stop");
     if (b) openEvent(b.getAttribute("data-ev"), true);
@@ -937,6 +968,7 @@ const LEGS = /*__LEGS__*/null;
 
   /* boot */
   syncStay();
+  $("start").value = String(state.start);
   renderStatic();
   compute();
   fitAll();
