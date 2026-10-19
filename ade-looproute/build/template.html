@@ -166,6 +166,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 .notice li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; }
 .notice .t { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
 .notice p, .assume p { margin: 0; color: var(--muted); font-size: 12.5px; }
+.missing-block { display: flex; flex-direction: column; gap: 8px; }
+.notice.no-missing .assume { border-top: 0; padding-top: 0; }
 .assume { border-top: 1px solid var(--rule); padding-top: 12px; }
 .assume summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
 .assume summary::-webkit-details-marker { display: none; }
@@ -363,13 +365,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
       <div class="control-row">
         <label class="control-label" for="start">Start om</label>
         <select id="start">
-          <option value="600">10:00</option>
-          <option value="630">10:30</option>
-          <option value="660" selected>11:00</option>
-          <option value="690">11:30</option>
-          <option value="720">12:00</option>
-          <option value="750">12:30</option>
-          <option value="780">13:00</option>
+          <option value="840">14:00</option>
+          <option value="870">14:30</option>
+          <option value="900" selected>15:00</option>
+          <option value="930">15:30</option>
+          <option value="960">16:00</option>
+          <option value="990">16:30</option>
         </select>
       </div>
       <div class="control-row">
@@ -383,15 +384,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
       </div>
       <div class="btns">
         <a class="btn primary" id="gmaps-all" href="#" target="_blank" rel="noopener">Route in Google Maps ↗</a>
-        <button class="btn" type="button" id="fit-all">Hele route</button>
+        <button class="btn" type="button" id="fit-all">Alles</button>
         <button class="btn" type="button" id="fit-center">Centrum</button>
       </div>
     </div>
 
-    <section class="notice" aria-labelledby="missing-h">
-      <h2 id="missing-h">Locatie ontbreekt (<span id="missing-n">0</span>)</h2>
-      <ul id="missing-list"></ul>
-      <p>Niet op de kaart en niet in de route. Online is ook geen adres gevonden. Met een adres kan het erbij.</p>
+    <section class="notice" id="notice" aria-label="Ontbrekende locaties en aannames">
+      <div class="missing-block" id="missing-block">
+        <h2>Locatie ontbreekt (<span id="missing-n">0</span>)</h2>
+        <ul id="missing-list"></ul>
+        <p>Niet op de kaart en niet in de route. Online is ook geen adres gevonden. Met een adres kan het erbij.</p>
+      </div>
       <details class="assume" id="assume">
         <summary><span>Aannames (<span id="assume-n">0</span>)</span></summary>
         <ul id="assume-list"></ul>
@@ -441,7 +444,6 @@ const LEGS = /*__LEGS__*/null;
   /* ---------------- data ---------------- */
   const LOCS = {
     froda:     { tag: "FRODA'S",          addr: "De Clercqstraat 40H",    ll: [52.37125, 4.87104], side: "left" },
-    quattro:   { tag: "Quattro Gatti",    addr: "Hartenstraat 3",         ll: [52.37223, 4.88656], side: "top" },
     hertz:     { tag: "50:HERTZ",         addr: "Halvemaansteeg 14",      ll: [52.36655, 4.89575], side: "right" },
     stmpd:     { tag: "Garrix × STMPD",   addr: "Prins Hendrikkade 33",   ll: [52.37764, 4.89717], side: "right" },
     bierfab:   { tag: "Bierfabriek",      addr: "Rokin 75",               ll: [52.37053, 4.89300], side: "right" },
@@ -450,26 +452,26 @@ const LEGS = /*__LEGS__*/null;
     zwartgoud: { tag: "Zwart Goud",       addr: "Geldersekade 89",        ll: [52.37417, 4.90177], side: "right" },
     tokyo:     { tag: "Tokyo After Dark", addr: "Reguliersdwarsstraat 44", ll: [52.36622, 4.89149], side: "left" },
     prime:     { tag: "Club Prime",       addr: "Rembrandtplein 22",      ll: [52.36565, 4.89628], side: "bottom" },
-    baskets:   { tag: "Café Baskèts",     addr: "Eerste Van der Helststraat 15A", ll: [52.35647, 4.89277], side: "right" }
+    baskets:   { tag: "Café Baskèts",     addr: "Eerste Van der Helststraat 15A", ll: [52.35647, 4.89277], side: "left" },
+    iemand:    { tag: "Huis van Iemand Anders", addr: "Van Woustraat 2", ll: [52.35748, 4.89921], side: "right" }
   };
 
   const SRC_BNB = "https://www.iamsterdam.com/uit/agenda/nachtleven/clubbing/bnb-showcase-2026-canadian-take-over-friday-night";
   const SRC_HERTZ = "https://www.iamsterdam.com/en/whats-on/calendar/nightlife/clubbing/groove-kitchen-live-at-50-hertz-house-and-techno-cafe-rembrandt-square-ade-2026";
   const SRC_BEATPORT = "https://www.beatportal.com/articles/1625993-beatport-live-takes-over-zwart-goud-for-three-free-days-at-ade-2026";
+  const SRC_IEMAND = "https://www.openstreetmap.org/search?query=Huis%20van%20Iemand%20Anders%20Amsterdam";
   const SRC_BASKETS = "https://www.openstreetmap.org/search?query=Caf%C3%A9%20Bask%C3%A8ts%20Amsterdam";
 
   // Exact titles, times and addresses as they appear in the calendar screenshot.
   const EVENTS = [
+    { id: "garrix",   title: "Martin Garrix X STMPD RCRDS",  start: "00:00", end: "24:00", loc: "stmpd",
+      allDay: true, first: true, stay: 30,
+      assume: "Volgens jou de hele dag open, vlak bij Centraal Station. Daarom altijd de eerste stop. Jullie gaan er even langs; ik reken 30 minuten." },
     { id: "froda",    title: "Boogie house pop-up FRODA'S",  start: "11:00", end: "17:00", loc: "froda" },
-    { id: "amnesia",  title: "Amnesia",                      start: "11:30", end: "12:30", loc: null },
-    { id: "quattro",  title: "ADE -popup - Quattro Gatti",   start: "12:00", end: "15:00", loc: "quattro" },
     { id: "paradise", title: "Paradise × Baskèts merch pop-up", start: "12:00", end: "17:00", loc: "baskets",
       assume: "Van de Instagram-post: muziek 12:00 tot 17:00 op vr 23.10 (de pop-up is za 24.10 ook open). Het huisnummer valt op de poster weg achter een icoon; Café Baskèts zit volgens OpenStreetMap en de BAG op Eerste Van der Helststraat 15A.",
       src: SRC_BASKETS },
     { id: "dirty",    title: "50:HERTZ - Dirty disco",       start: "14:00", end: "22:00", loc: "hertz" },
-    { id: "garrix",   title: "Martin Garrix X STMPD RCRDS",  start: "00:00", end: "24:00", loc: "stmpd",
-      allDay: true, first: true, stay: 30,
-      assume: "Volgens jou de hele dag open, vlak bij Centraal Station. Daarom altijd de eerste stop. Jullie gaan er even langs; ik reken 30 minuten." },
     { id: "bierfab",  title: "Bierfabriek - Syntropy rsvp",  start: "15:00", end: "20:00", loc: "bierfab", inferred: true,
       assume: "Geen adres in je agenda. Bierfabriek Amsterdam zit op Rokin 75 (achteringang Nes 67). Check de RSVP-mail voor de zekerheid." },
     { id: "chenin",   title: "Chenin Radio",                 start: "15:00", end: "20:00", loc: "chenin" },
@@ -479,6 +481,9 @@ const LEGS = /*__LEGS__*/null;
       assume: "In je agenda staat Geldersekade 89s. De BAG kent geen 89s, dus ik gebruik Geldersekade 89: platenzaak Zwart Goud, waar !K7 vrijdag 17:00 tot 22:00 host.",
       src: SRC_BEATPORT },
     { id: "next",     title: "NEXTchapter - Prime",          start: "17:00", end: "21:00", loc: "prime" },
+    { id: "labels",   title: "labels.labs @ Huis van Iemand Anders", start: "17:00", end: "02:00", loc: "iemand", inferred: true,
+      assume: "Uit de Instagram-post: vr 23.10, 17:00 tot 02:00, gratis entree. De post tagt @huisvaniemandanders zonder adres; volgens OpenStreetMap zit café Huis van Iemand Anders op Van Woustraat 2 in De Pijp.",
+      src: SRC_IEMAND },
     { id: "bnb",      title: "50:HERTZ - BNB Showcase",      start: "22:00", end: "04:00", loc: "hertz", inferred: true,
       assume: "Geen adres in je agenda. iAmsterdam zet de BNB Showcase op vrijdag 23 oktober 22:00 tot 04:00 bij 50:Hertz aan het Rembrandtplein, dezelfde zaak als Dirty disco (Halvemaansteeg 14).",
       src: SRC_BNB, src2: SRC_HERTZ },
@@ -493,8 +498,8 @@ const LEGS = /*__LEGS__*/null;
   const byId = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 
   /* ---------------- state ---------------- */
-  const STORE_KEY = "ade-looproute-v1";
-  let state = { stay: 45, off: [], start: 660 };
+  const STORE_KEY = "ade-looproute-v2";
+  let state = { stay: 45, off: [], start: 900 };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
     if (saved && typeof saved.stay === "number" && Array.isArray(saved.off)) state = Object.assign(state, saved);
@@ -823,6 +828,8 @@ const LEGS = /*__LEGS__*/null;
   function renderStatic() {
     const missing = EVENTS.filter((e) => !e.loc);
     $("missing-n").textContent = missing.length;
+    $("missing-block").hidden = !missing.length;
+    $("notice").classList.toggle("no-missing", !missing.length);
     $("missing-list").innerHTML = missing.map((e) =>
       '<li><span class="t">' + e.start + "–" + e.end + "</span><span><b>" + esc(e.title) + "</b></span></li>").join("");
     const assumptions = [
@@ -956,11 +963,13 @@ const LEGS = /*__LEGS__*/null;
   $("tab-prog").addEventListener("click", () => selectTab("prog"));
 
   function fitAll() {
-    const pts = (plan.stops.length ? plan.stops.map((s) => LOCS[s.ev.loc].ll) : Object.values(LOCS).map((l) => l.ll));
-    map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [48, 48], paddingBottomRight: [130, 40], maxZoom: 16 });
+    // every selected event, also the ones that do not fit, so nothing on the plan is off-screen
+    const sel = EVENTS.filter((e) => e.loc && !state.off.includes(e.id));
+    const pts = (sel.length ? sel : EVENTS.filter((e) => e.loc)).map((e) => LOCS[e.loc].ll);
+    map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [110, 48], paddingBottomRight: [150, 48], maxZoom: 16 });
   }
   function fitCenter() {
-    const ids = ["froda", "quattro", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime", "baskets"];
+    const ids = ["froda", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime", "baskets", "iemand"];
     map.fitBounds(L.latLngBounds(ids.map((id) => LOCS[id].ll)), { paddingTopLeft: [110, 40], paddingBottomRight: [130, 40] });
   }
   $("fit-all").addEventListener("click", fitAll);

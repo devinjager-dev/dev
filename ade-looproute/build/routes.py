@@ -13,6 +13,7 @@ LOCS = {
   "tokyo":   (4.89149, 52.36622),  # Reguliersdwarsstraat 44
   "prime":   (4.89628, 52.36565),  # Rembrandtplein 22 (Club Prime)
   "baskets": (4.89277, 52.35647),  # Eerste Van der Helststraat 15A (Café Baskèts)
+  "iemand":  (4.89921, 52.35748),  # Van Woustraat 2 (Huis van Iemand Anders)
 }
 ids = list(LOCS)
 try:
