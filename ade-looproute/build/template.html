@@ -449,18 +449,23 @@ const LEGS = /*__LEGS__*/null;
     poeder:    { tag: "Poederbaas",       addr: "Duivendrechtsekade 80B", ll: [52.33784, 4.93324], side: "right" },
     zwartgoud: { tag: "Zwart Goud",       addr: "Geldersekade 89",        ll: [52.37417, 4.90177], side: "right" },
     tokyo:     { tag: "Tokyo After Dark", addr: "Reguliersdwarsstraat 44", ll: [52.36622, 4.89149], side: "left" },
-    prime:     { tag: "Club Prime",       addr: "Rembrandtplein 22",      ll: [52.36565, 4.89628], side: "bottom" }
+    prime:     { tag: "Club Prime",       addr: "Rembrandtplein 22",      ll: [52.36565, 4.89628], side: "bottom" },
+    baskets:   { tag: "Café Baskèts",     addr: "Eerste Van der Helststraat 15A", ll: [52.35647, 4.89277], side: "right" }
   };
 
   const SRC_BNB = "https://www.iamsterdam.com/uit/agenda/nachtleven/clubbing/bnb-showcase-2026-canadian-take-over-friday-night";
   const SRC_HERTZ = "https://www.iamsterdam.com/en/whats-on/calendar/nightlife/clubbing/groove-kitchen-live-at-50-hertz-house-and-techno-cafe-rembrandt-square-ade-2026";
   const SRC_BEATPORT = "https://www.beatportal.com/articles/1625993-beatport-live-takes-over-zwart-goud-for-three-free-days-at-ade-2026";
+  const SRC_BASKETS = "https://www.openstreetmap.org/search?query=Caf%C3%A9%20Bask%C3%A8ts%20Amsterdam";
 
   // Exact titles, times and addresses as they appear in the calendar screenshot.
   const EVENTS = [
     { id: "froda",    title: "Boogie house pop-up FRODA'S",  start: "11:00", end: "17:00", loc: "froda" },
     { id: "amnesia",  title: "Amnesia",                      start: "11:30", end: "12:30", loc: null },
     { id: "quattro",  title: "ADE -popup - Quattro Gatti",   start: "12:00", end: "15:00", loc: "quattro" },
+    { id: "paradise", title: "Paradise × Baskèts merch pop-up", start: "12:00", end: "17:00", loc: "baskets",
+      assume: "Van de Instagram-post: muziek 12:00 tot 17:00 op vr 23.10 (de pop-up is za 24.10 ook open). Het huisnummer valt op de poster weg achter een icoon; Café Baskèts zit volgens OpenStreetMap en de BAG op Eerste Van der Helststraat 15A.",
+      src: SRC_BASKETS },
     { id: "dirty",    title: "50:HERTZ - Dirty disco",       start: "14:00", end: "22:00", loc: "hertz" },
     { id: "garrix",   title: "Martin Garrix X STMPD RCRDS",  start: "00:00", end: "24:00", loc: "stmpd",
       allDay: true, first: true, stay: 30,
@@ -666,7 +671,7 @@ const LEGS = /*__LEGS__*/null;
   // orientation labels
   const LANDMARKS = [
     ["Centraal Station", 52.3796, 4.9003], ["Dam", 52.3731, 4.8930], ["Leidseplein", 52.3637, 4.8826],
-    ["Nieuwmarkt", 52.3718, 4.9006], ["Jordaan", 52.3762, 4.8812], ["De Pijp", 52.3540, 4.8930],
+    ["Nieuwmarkt", 52.3718, 4.9006], ["Jordaan", 52.3762, 4.8812], ["De Pijp", 52.3518, 4.8968],
     ["Vondelpark", 52.3580, 4.8690], ["Oosterpark", 52.3602, 4.9205], ["Oud-West", 52.3650, 4.8690],
     ["Station Amstel", 52.3462, 4.9178], ["Museumplein", 52.3575, 4.8820],
     ["IJ", 52.3878, 4.8956, "water"], ["Amstel", 52.3530, 4.9090, "water"]
@@ -955,7 +960,7 @@ const LEGS = /*__LEGS__*/null;
     map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [48, 48], paddingBottomRight: [130, 40], maxZoom: 16 });
   }
   function fitCenter() {
-    const ids = ["froda", "quattro", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime"];
+    const ids = ["froda", "quattro", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime", "baskets"];
     map.fitBounds(L.latLngBounds(ids.map((id) => LOCS[id].ll)), { paddingTopLeft: [110, 40], paddingBottomRight: [130, 40] });
   }
   $("fit-all").addEventListener("click", fitAll);

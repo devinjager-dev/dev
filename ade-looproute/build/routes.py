@@ -12,6 +12,7 @@ LOCS = {
   "zwartgoud": (4.90177, 52.37417),# Geldersekade 89
   "tokyo":   (4.89149, 52.36622),  # Reguliersdwarsstraat 44
   "prime":   (4.89628, 52.36565),  # Rembrandtplein 22 (Club Prime)
+  "baskets": (4.89277, 52.35647),  # Eerste Van der Helststraat 15A (Café Baskèts)
 }
 ids = list(LOCS)
 try:
