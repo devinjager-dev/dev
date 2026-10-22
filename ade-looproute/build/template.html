@@ -472,10 +472,11 @@ const LEGS = /*__LEGS__*/null;
 
   // Exact titles, times and addresses as they appear in the calendar screenshot.
   const EVENTS = [
+    { id: "froda",    title: "Boogie house pop-up FRODA'S",  start: "11:00", end: "17:00", loc: "froda", first: true,
+      assume: "Jullie beginnen hier. Daarom altijd de eerste stop." },
     { id: "garrix",   title: "Martin Garrix X STMPD RCRDS",  start: "00:00", end: "24:00", loc: "stmpd",
-      allDay: true, first: true, stay: 30,
-      assume: "Volgens jou de hele dag open, vlak bij Centraal Station. Daarom altijd de eerste stop. Jullie gaan er even langs; ik reken 30 minuten." },
-    { id: "froda",    title: "Boogie house pop-up FRODA'S",  start: "11:00", end: "17:00", loc: "froda" },
+      allDay: true, pinOnly: true, stay: 30,
+      assume: "Volgens jou de hele dag open, vlak bij Centraal Station. Staat los als pin, buiten de route: jullie kijken op de terugweg of jullie langsgaan. Zet hem aan in Programma om hem mee te rekenen (30 minuten)." },
     { id: "paradise", title: "Paradise × Baskèts merch pop-up", start: "12:00", end: "17:00", loc: "baskets",
       assume: "Van de Instagram-post: muziek 12:00 tot 17:00 op vr 23.10 (de pop-up is za 24.10 ook open). Het huisnummer valt op de poster weg achter een icoon; Café Baskèts zit volgens OpenStreetMap en de BAG op Eerste Van der Helststraat 15A.",
       src: SRC_BASKETS },
@@ -509,8 +510,8 @@ const LEGS = /*__LEGS__*/null;
   const byId = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
 
   /* ---------------- state ---------------- */
-  const STORE_KEY = "ade-looproute-v2";
-  let state = { stay: 45, off: [], start: 900 };
+  const STORE_KEY = "ade-looproute-v3";
+  let state = { stay: 45, off: EVENTS.filter((e) => e.pinOnly).map((e) => e.id), start: 900 };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
     if (saved && typeof saved.stay === "number" && Array.isArray(saved.off)) state = Object.assign(state, saved);
@@ -733,7 +734,7 @@ const LEGS = /*__LEGS__*/null;
         const st = pinState(e);
         const label = st === "in" ? plan.order[e.id] : st === "off" ? "–" : "×";
         const cls = ["pin", st === "in" ? "" : st, e.inferred ? "inferred" : ""].join(" ").trim();
-        const aria = esc(e.title) + ", " + win(e, " tot ") + (st === "in" ? ", stop " + plan.order[e.id] : st === "off" ? ", uitgezet" : ", past niet in de route");
+        const aria = esc(e.title) + ", " + win(e, " tot ") + (st === "in" ? ", stop " + plan.order[e.id] : st === "off" ? (e.pinOnly ? ", losse pin" : ", uitgezet") : ", past niet in de route");
         return '<button type="button" class="' + cls + '" data-ev="' + e.id + '" aria-label="' + aria + '">' + label + "</button>";
       }).join("");
       const half = (evs.length * 30 + (evs.length - 1) * 3) / 2;
@@ -829,7 +830,7 @@ const LEGS = /*__LEGS__*/null;
     const st = pinState(e);
     const n = plan.order[e.id];
     const stop = n ? plan.stops[n - 1] : null;
-    let ey = st === "in" ? "Stop " + n + " van " + plan.stops.length : st === "off" ? "Uitgezet" : "Past niet in de route";
+    let ey = st === "in" ? "Stop " + n + " van " + plan.stops.length : st === "off" ? (e.pinOnly ? "Losse pin, niet in de route" : "Uitgezet") : "Past niet in de route";
     let h = '<div class="pop"><div class="ey">' + ey + "</div><h3>" + esc(e.title) + "</h3>";
     h += '<div class="addr">' + esc(LOCS[e.loc].addr) + ", Amsterdam</div>";
     h += '<dl class="when"><dt>Open</dt><dd>' + win(e, " – ") + "</dd>";
@@ -847,7 +848,7 @@ const LEGS = /*__LEGS__*/null;
     }
     h += '<div class="acts"><a href="' + gEvent(e) + '" target="_blank" rel="noopener">Google Maps ↗</a>';
     if (stop && stop.legIn && stop.legIn.m) h += '<a href="' + gLeg(plan.stops[n - 2].ev.loc, e.loc) + '" target="_blank" rel="noopener">Loop hierheen ↗</a>';
-    h += '<button type="button" data-toggle="' + e.id + '">' + (st === "off" ? "Zet aan" : "Zet uit") + "</button></div></div>";
+    h += '<button type="button" data-toggle="' + e.id + '">' + (st === "off" ? "Zet in route" : "Haal uit route") + "</button></div></div>";
     return h;
   }
 
@@ -949,7 +950,7 @@ const LEGS = /*__LEGS__*/null;
       const off = state.off.includes(e.id);
       let chips = "";
       if (!e.loc) chips += '<span class="chip missing">Locatie ontbreekt</span>';
-      else if (off) chips += '<span class="chip off">Uitgezet</span>';
+      else if (off) chips += '<span class="chip off">' + (e.pinOnly ? "Losse pin" : "Uitgezet") + "</span>";
       else if (p.order[e.id]) chips += '<span class="chip in">Stop ' + p.order[e.id] + "</span>";
       else chips += '<span class="chip out">Past niet in tijd</span>';
       if (e.inferred) chips += '<span class="chip guess">Adres afgeleid</span>';
@@ -1024,7 +1025,7 @@ const LEGS = /*__LEGS__*/null;
 
   function fitAll() {
     // every selected event, also the ones that do not fit, so nothing on the plan is off-screen
-    const sel = EVENTS.filter((e) => e.loc && !state.off.includes(e.id));
+    const sel = EVENTS.filter((e) => e.loc && (e.pinOnly || !state.off.includes(e.id)));
     const pts = (sel.length ? sel : EVENTS.filter((e) => e.loc)).map((e) => LOCS[e.loc].ll);
     map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [110, 48], paddingBottomRight: [150, 48], maxZoom: 16 });
   }
