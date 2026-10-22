@@ -14,6 +14,7 @@ LOCS = {
   "prime":   (4.89628, 52.36565),  # Rembrandtplein 22 (Club Prime)
   "baskets": (4.89277, 52.35647),  # Eerste Van der Helststraat 15A (Café Baskèts)
   "iemand":  (4.89921, 52.35748),  # Van Woustraat 2 (Huis van Iemand Anders)
+  "brandon": (4.88644, 52.37540),  # Keizersgracht 157 (Café Brandon)
 }
 ids = list(LOCS)
 try:

@@ -257,7 +257,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 .leaflet-popup-content { margin: 14px 16px; font-family: var(--font-body); font-size: 13px; line-height: 1.45; }
 .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
 
+.vwrap { position: absolute; left: 0; top: 0; transform: translate(var(--ox, 0px), var(--oy, 0px)); }
 .pins { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); display: flex; gap: 3px; }
+.anchor {
+  position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink); border: 1.5px solid var(--surface); box-sizing: border-box; display: none;
+}
+.moved .anchor { display: block; }
 .pin {
   width: 30px; height: 30px; border-radius: 50%; padding: 0; cursor: pointer;
   display: grid; place-items: center;
@@ -271,7 +277,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 .pin.out { background: var(--surface); color: var(--warn); border-color: var(--warn); }
 .pin.off { background: var(--surface); color: var(--muted); border-color: var(--muted); }
 .tag {
-  position: absolute; top: 0; white-space: nowrap; pointer-events: auto; cursor: pointer;
+  position: absolute; top: 0; white-space: nowrap; pointer-events: none;
   font-family: var(--font-display); font-stretch: 78%; font-weight: 700; font-size: 13px; letter-spacing: .01em;
   color: var(--ink); background: var(--surface); border: 1px solid var(--rule);
   padding: 3px 7px 4px; border-radius: 6px; line-height: 1.1;
@@ -453,12 +459,14 @@ const LEGS = /*__LEGS__*/null;
     tokyo:     { tag: "Tokyo After Dark", addr: "Reguliersdwarsstraat 44", ll: [52.36622, 4.89149], side: "left" },
     prime:     { tag: "Club Prime",       addr: "Rembrandtplein 22",      ll: [52.36565, 4.89628], side: "bottom" },
     baskets:   { tag: "Café Baskèts",     addr: "Eerste Van der Helststraat 15A", ll: [52.35647, 4.89277], side: "left" },
-    iemand:    { tag: "Huis van Iemand Anders", addr: "Van Woustraat 2", ll: [52.35748, 4.89921], side: "right" }
+    iemand:    { tag: "Huis van Iemand Anders", addr: "Van Woustraat 2", ll: [52.35748, 4.89921], side: "right" },
+    brandon:   { tag: "Café Brandon",     addr: "Keizersgracht 157",      ll: [52.37540, 4.88644], side: "right" }
   };
 
   const SRC_BNB = "https://www.iamsterdam.com/uit/agenda/nachtleven/clubbing/bnb-showcase-2026-canadian-take-over-friday-night";
   const SRC_HERTZ = "https://www.iamsterdam.com/en/whats-on/calendar/nightlife/clubbing/groove-kitchen-live-at-50-hertz-house-and-techno-cafe-rembrandt-square-ade-2026";
   const SRC_BEATPORT = "https://www.beatportal.com/articles/1625993-beatport-live-takes-over-zwart-goud-for-three-free-days-at-ade-2026";
+  const SRC_DRUMCITY = "https://www.amsterdam-dance-event.nl/en/program/2026/drumcity/2835000/";
   const SRC_IEMAND = "https://www.openstreetmap.org/search?query=Huis%20van%20Iemand%20Anders%20Amsterdam";
   const SRC_BASKETS = "https://www.openstreetmap.org/search?query=Caf%C3%A9%20Bask%C3%A8ts%20Amsterdam";
 
@@ -484,10 +492,13 @@ const LEGS = /*__LEGS__*/null;
     { id: "labels",   title: "labels.labs @ Huis van Iemand Anders", start: "17:00", end: "02:00", loc: "iemand", inferred: true,
       assume: "Uit de Instagram-post: vr 23.10, 17:00 tot 02:00, gratis entree. De post tagt @huisvaniemandanders zonder adres; volgens OpenStreetMap zit café Huis van Iemand Anders op Van Woustraat 2 in De Pijp.",
       src: SRC_IEMAND },
+    { id: "drumcity", title: "Drumcity",                     start: "18:00", end: "22:00", loc: "brandon",
+      assume: "Uit het ADE-programma: vr 23 oktober 18:00 tot 22:00 in Café Brandon, Keizersgracht 157.", src: SRC_DRUMCITY },
     { id: "bnb",      title: "50:HERTZ - BNB Showcase",      start: "22:00", end: "04:00", loc: "hertz", inferred: true,
       assume: "Geen adres in je agenda. iAmsterdam zet de BNB Showcase op vrijdag 23 oktober 22:00 tot 04:00 bij 50:Hertz aan het Rembrandtplein, dezelfde zaak als Dirty disco (Halvemaansteeg 14).",
       src: SRC_BNB, src2: SRC_HERTZ },
-    { id: "tokyo",    title: "Tokyo After Dark",             start: "22:00", end: "04:00", loc: "tokyo" }
+    { id: "tokyo",    title: "Tokyo After Dark",             start: "22:00", end: "04:00", loc: "tokyo", last: true,
+      assume: "Volgens jou maakt het niet uit hoe laat jullie er zijn. Daarom altijd de laatste stop; open tot 04:00." }
   ];
   const toMin = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
   EVENTS.forEach((e) => {
@@ -544,12 +555,14 @@ const LEGS = /*__LEGS__*/null;
     let best = null;
     const stack = [];
     const firstIdx = evs.findIndex((ev) => ev.first);
+    const lastIdx = evs.findIndex((ev) => ev.last);
     evs.forEach((ev, i) => {
       if (firstIdx >= 0 && i !== firstIdx) return; // a fixed first stop
       const begin = Math.max(startAt, ev.s);
       if (begin + stayAt(ev, stay) <= ev.e) stack.push([1 << i, i, begin + stayAt(ev, stay), 0, 0, [i]]);
     });
     if (!stack.length) return { cnt: 0, cost: 0, dist: 0, path: [] };
+    // (if nothing can end at the fixed last stop, best stays null and the caller gets an empty route)
     while (stack.length) {
       const [mask, last, t, cost, dist, path] = stack.pop();
       const key = mask * 32 + last;
@@ -559,9 +572,11 @@ const LEGS = /*__LEGS__*/null;
       for (let k = fr.length - 1; k >= 0; k--) if (t <= fr[k][0] && cost <= fr[k][1] + 1e-9 && dist <= fr[k][2]) fr.splice(k, 1);
       fr.push([t, cost, dist]);
       const cnt = popcount(mask);
-      if (!best || cnt > best.cnt || (cnt === best.cnt && (cost < best.cost - 1e-6 || (Math.abs(cost - best.cost) <= 1e-6 && dist < best.dist)))) {
+      const endsRight = lastIdx < 0 || last === lastIdx; // a fixed last stop closes the route
+      if (endsRight && (!best || cnt > best.cnt || (cnt === best.cnt && (cost < best.cost - 1e-6 || (Math.abs(cost - best.cost) <= 1e-6 && dist < best.dist))))) {
         best = { cnt, cost, dist, path };
       }
+      if (last === lastIdx) continue;
       const from = evs[last];
       for (let j = 0; j < n; j++) {
         if (mask & (1 << j)) continue;
@@ -574,11 +589,12 @@ const LEGS = /*__LEGS__*/null;
         stack.push([mask | (1 << j), j, begin + st, cost + lg.min + idle, dist + lg.m, path.concat(j)]);
       }
     }
-    return best;
+    return best || { cnt: 0, cost: 0, dist: 0, path: [] };
   }
 
   // Turn an order into a timetable. You leave each stop as late as still makes sense:
-  // when the next event opens, or when this one closes, whichever is first.
+  // when the next event opens (or, for a fixed last stop, when you must leave to still get your
+  // minimum time there), or when this one closes, whichever is first.
   function timetable(evs, path, stay, startAt) {
     const stops = [];
     for (let k = 0; k < path.length; k++) {
@@ -595,7 +611,9 @@ const LEGS = /*__LEGS__*/null;
       if (k + 1 < path.length) {
         const nx = evs[path[k + 1]];
         const w = leg(ev.loc, nx.loc).min;
-        depart = Math.max(minLeave, Math.min(ev.e, nx.s - w));
+        // a fixed last stop can wait until just before it closes, so stay here longer
+        const arriveBy = nx.last ? nx.e - stayAt(nx, stay) : nx.s;
+        depart = Math.max(minLeave, Math.min(ev.e, arriveBy - w));
       }
       stops.push({ ev, arrive, begin, depart, wait: Math.max(0, ev.s - arrive), legIn: lg });
     }
@@ -723,9 +741,51 @@ const LEGS = /*__LEGS__*/null;
       const allOff = evs.every((e) => pinState(e) !== "in");
       const tag = '<div class="tag ' + L0.side + (allOff ? " dim" : "") + '" data-ev="' + evs[0].id + '" style="--half:' + half + 'px">' +
         esc(L0.tag) + "<small>" + times + "</small></div>";
-      venueMarkers[locId].setIcon(L.divIcon({ className: "venue", iconSize: [0, 0], html: '<div class="pins">' + pins + "</div>" + tag }));
+      venueMarkers[locId].setIcon(L.divIcon({
+        className: "venue", iconSize: [0, 0],
+        html: '<span class="anchor"></span><div class="vwrap"><div class="pins">' + pins + "</div>" + tag + "</div>"
+      }));
       venueMarkers[locId].setZIndexOffset(allOff ? 0 : 500);
     });
+    declutter();
+  }
+
+  // Zoomed out, venues a few hundred metres apart would stack their pins on top of each other.
+  // Nudge overlapping pin groups apart in screen space; a dot keeps marking the real spot.
+  const OFFS = {};
+  function declutter() {
+    const it = Object.keys(venueMarkers).map((id) => {
+      const p = map.latLngToLayerPoint(LOCS[id].ll);
+      const n = eventsAt[id].length;
+      return { id, x: p.x, y: p.y, hw: (n * 30 + (n - 1) * 3) / 2 + 3, hh: 18, dx: 0, dy: 0 };
+    });
+    for (let k = 0; k < 60; k++) {
+      let moved = false;
+      for (let i = 0; i < it.length; i++) for (let j = i + 1; j < it.length; j++) {
+        const a = it[i], b = it[j];
+        const vx = b.x + b.dx - (a.x + a.dx), vy = b.y + b.dy - (a.y + a.dy);
+        const ox = a.hw + b.hw - Math.abs(vx), oy = a.hh + b.hh - Math.abs(vy);
+        if (ox <= 0 || oy <= 0) continue;
+        moved = true;
+        if (oy <= ox) { const sh = (vy >= 0 ? 1 : -1) * (oy / 2 + 0.5); a.dy -= sh; b.dy += sh; }
+        else { const sh = (vx >= 0 ? 1 : -1) * (ox / 2 + 0.5); a.dx -= sh; b.dx += sh; }
+      }
+      if (!moved) break;
+    }
+    it.forEach((v) => {
+      OFFS[v.id] = [Math.round(v.dx), Math.round(v.dy)];
+      const el = venueMarkers[v.id].getElement();
+      if (!el) return;
+      el.style.setProperty("--ox", OFFS[v.id][0] + "px");
+      el.style.setProperty("--oy", OFFS[v.id][1] + "px");
+      el.classList.toggle("moved", Math.abs(v.dx) + Math.abs(v.dy) > 2);
+    });
+    if (openId && byId[openId]) { popup.options.offset = popupOffset(byId[openId]); if (popup.isOpen()) popup.update(); }
+  }
+  function popupOffset(e) {
+    const evs = eventsAt[e.loc];
+    const off = OFFS[e.loc] || [0, 0];
+    return [(evs.indexOf(e) - (evs.length - 1) / 2) * 33 + off[0], -14 + off[1]];
   }
 
   /* route lines */
@@ -798,12 +858,12 @@ const LEGS = /*__LEGS__*/null;
     const e = byId[id];
     if (!e || !e.loc) return;
     openId = id;
-    const evs = eventsAt[e.loc];
-    const idx = evs.indexOf(e);
-    const dx = (idx - (evs.length - 1) / 2) * 33;
-    popup.options.offset = [dx, -14];
     const ll = LOCS[e.loc].ll;
-    const show = () => { popup.setLatLng(ll).setContent(popupHtml(e)).openOn(map); openId = id; hot(id); };
+    const show = () => {
+      popup.options.offset = popupOffset(e);
+      popup.setLatLng(ll).setContent(popupHtml(e)).openOn(map);
+      openId = id; hot(id);
+    };
     const inView = map.getZoom() >= 14.5 && map.getBounds().pad(-0.15).contains(ll);
     if (fly && !inView) {
       map.once("moveend", show);
@@ -969,13 +1029,13 @@ const LEGS = /*__LEGS__*/null;
     map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [110, 48], paddingBottomRight: [150, 48], maxZoom: 16 });
   }
   function fitCenter() {
-    const ids = ["froda", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime", "baskets", "iemand"];
+    const ids = ["froda", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime", "baskets", "iemand", "brandon"];
     map.fitBounds(L.latLngBounds(ids.map((id) => LOCS[id].ll)), { paddingTopLeft: [110, 40], paddingBottomRight: [130, 40] });
   }
   $("fit-all").addEventListener("click", fitAll);
   $("fit-center").addEventListener("click", fitCenter);
 
-  map.on("zoomend", styleBase);
+  map.on("zoomend", () => { styleBase(); declutter(); });
   const restyle = () => { styleBase(); drawRoute(); };
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", restyle); } catch (_) {}
   new MutationObserver(restyle).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
