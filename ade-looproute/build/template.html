@@ -374,9 +374,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
         <select id="start">
           <option value="840">14:00</option>
           <option value="870">14:30</option>
-          <option value="900" selected>15:00</option>
+          <option value="900">15:00</option>
           <option value="930">15:30</option>
-          <option value="960">16:00</option>
+          <option value="960" selected>16:00</option>
           <option value="990">16:30</option>
         </select>
       </div>
@@ -517,16 +517,20 @@ const LEGS = /*__LEGS__*/null;
   /* ---------------- state ---------------- */
   const STORE_KEY = "ade-looproute-v3";
   const PIN_ONLY = EVENTS.filter((e) => e.pinOnly).map((e) => e.id);
-  let state = { stay: 45, off: PIN_ONLY.slice(), start: 900 };
+  // START_REV goes up whenever the planned start time changes, so a saved older start is replaced
+  const START_REV = 2, START_DEFAULT = 960;
+  let state = { stay: 45, off: PIN_ONLY.slice(), start: START_DEFAULT };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
     if (saved && typeof saved.stay === "number" && Array.isArray(saved.off)) {
       const known = Array.isArray(saved.known) ? saved.known : [];
       state = Object.assign(state, saved);
+      if (saved.startRev !== START_REV) state.start = START_DEFAULT;
       EVENTS.forEach((e) => { if (e.pinOnly && !known.includes(e.id) && !state.off.includes(e.id)) state.off.push(e.id); });
     }
   } catch (_) { /* storage unavailable */ }
   state.known = PIN_ONLY;
+  state.startRev = START_REV;
   const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {} };
 
   /* ---------------- formatting ---------------- */
