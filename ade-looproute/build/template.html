@@ -320,6 +320,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 .lg-line.long { border-top: 3px dotted var(--warn); }
 .lg-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
 .lg-dot.out { background: var(--surface); border: 2px solid var(--warn); width: 8px; height: 8px; }
+.lg-dot.off { background: var(--surface); border: 2px solid var(--muted); width: 8px; height: 8px; }
 .lg-dot.guess { background: transparent; outline: 2px dashed var(--warn); width: 8px; height: 8px; }
 
 .pop { display: flex; flex-direction: column; gap: 6px; min-width: 210px; }
@@ -432,7 +433,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
       <div><span class="lg-line"></span>Looproute</div>
       <div><span class="lg-line long"></span>Lang stuk, overweeg tram of fiets</div>
       <div><span class="lg-dot"></span>Stop in route</div>
-      <div><span class="lg-dot out"></span>Past niet of uitgezet</div>
+      <div><span class="lg-dot out"></span>Past niet in tijd</div>
+      <div><span class="lg-dot off"></span>Losse pin of uitgezet</div>
       <div><span class="lg-dot guess"></span>Adres afgeleid</div>
     </div>
   </main>
@@ -460,7 +462,8 @@ const LEGS = /*__LEGS__*/null;
     prime:     { tag: "Club Prime",       addr: "Rembrandtplein 22",      ll: [52.36565, 4.89628], side: "bottom" },
     baskets:   { tag: "Café Baskèts",     addr: "Eerste Van der Helststraat 15A", ll: [52.35647, 4.89277], side: "left" },
     iemand:    { tag: "Huis van Iemand Anders", addr: "Van Woustraat 2", ll: [52.35748, 4.89921], side: "right" },
-    brandon:   { tag: "Café Brandon",     addr: "Keizersgracht 157",      ll: [52.37540, 4.88644], side: "right" }
+    brandon:   { tag: "Café Brandon",     addr: "Keizersgracht 157",      ll: [52.37540, 4.88644], side: "right" },
+    quattro:   { tag: "Quattro Gatti",    addr: "Hartenstraat 3",         ll: [52.37223, 4.88656], side: "left" }
   };
 
   const SRC_BNB = "https://www.iamsterdam.com/uit/agenda/nachtleven/clubbing/bnb-showcase-2026-canadian-take-over-friday-night";
@@ -474,6 +477,8 @@ const LEGS = /*__LEGS__*/null;
   const EVENTS = [
     { id: "froda",    title: "Boogie house pop-up FRODA'S",  start: "11:00", end: "17:00", loc: "froda", first: true,
       assume: "Jullie beginnen hier. Daarom altijd de eerste stop." },
+    { id: "quattro",  title: "ADE -popup - Quattro Gatti",   start: "12:00", end: "15:00", loc: "quattro", pinOnly: true,
+      assume: "Sluit om 15:00, precies als jullie beginnen. Staat daarom los als pin, buiten de route." },
     { id: "garrix",   title: "Martin Garrix X STMPD RCRDS",  start: "00:00", end: "24:00", loc: "stmpd",
       allDay: true, pinOnly: true, stay: 30,
       assume: "Volgens jou de hele dag open, vlak bij Centraal Station. Staat los als pin, buiten de route: jullie kijken op de terugweg of jullie langsgaan. Zet hem aan in Programma om hem mee te rekenen (30 minuten)." },
@@ -511,11 +516,17 @@ const LEGS = /*__LEGS__*/null;
 
   /* ---------------- state ---------------- */
   const STORE_KEY = "ade-looproute-v3";
-  let state = { stay: 45, off: EVENTS.filter((e) => e.pinOnly).map((e) => e.id), start: 900 };
+  const PIN_ONLY = EVENTS.filter((e) => e.pinOnly).map((e) => e.id);
+  let state = { stay: 45, off: PIN_ONLY.slice(), start: 900 };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (saved && typeof saved.stay === "number" && Array.isArray(saved.off)) state = Object.assign(state, saved);
+    if (saved && typeof saved.stay === "number" && Array.isArray(saved.off)) {
+      const known = Array.isArray(saved.known) ? saved.known : [];
+      state = Object.assign(state, saved);
+      EVENTS.forEach((e) => { if (e.pinOnly && !known.includes(e.id) && !state.off.includes(e.id)) state.off.push(e.id); });
+    }
   } catch (_) { /* storage unavailable */ }
+  state.known = PIN_ONLY;
   const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {} };
 
   /* ---------------- formatting ---------------- */
@@ -1030,7 +1041,7 @@ const LEGS = /*__LEGS__*/null;
     map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [110, 48], paddingBottomRight: [150, 48], maxZoom: 16 });
   }
   function fitCenter() {
-    const ids = ["froda", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime", "baskets", "iemand", "brandon"];
+    const ids = ["froda", "hertz", "stmpd", "bierfab", "chenin", "zwartgoud", "tokyo", "prime", "baskets", "iemand", "brandon", "quattro"];
     map.fitBounds(L.latLngBounds(ids.map((id) => LOCS[id].ll)), { paddingTopLeft: [110, 40], paddingBottomRight: [130, 40] });
   }
   $("fit-all").addEventListener("click", fitAll);
