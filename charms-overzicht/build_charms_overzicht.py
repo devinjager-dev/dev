@@ -6,7 +6,12 @@ Gebruik:
 
 De page_*.json bestanden zijn de publieke Shopify-feed van de collectie:
     https://nl.charmsoff.com/collections/customize-your-bracelet/products.json?limit=250&page=N
+
+Het bestand wordt gemaakt met XlsxWriter, omdat alleen die bibliotheek echte
+Excel-checkboxes (Microsoft 365) kan schrijven. Niet opnieuw opslaan via
+LibreOffice of openpyxl: dan verdwijnen de checkboxes.
 """
+import collections
 import datetime
 import glob
 import json
@@ -14,9 +19,8 @@ import os
 import re
 import sys
 
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
+import xlsxwriter
+from xlsxwriter.utility import xl_col_to_name
 
 SHOP = "https://nl.charmsoff.com"
 COLLECTION_URL = SHOP + "/collections/customize-your-bracelet"
@@ -41,12 +45,10 @@ THEMES = [
     ("Money & Casino", "Geld & Casino"),
     ("Classic & Plain", "Klassiek & Effen"),
 ]
-THEME_NL = dict(THEMES)
 THEME_ORDER = [nl for _, nl in THEMES] + ["Mysteriebox"]
 
 COLORS = ["Zilver", "Goud", "Roségoud", "Zwart", "Gemengd"]
 TYPES = ["Klassieke link-bedel", "Hangende bedel", "Dubbele bedel", "Dubbel verbonden bedel"]
-
 
 METAL_WORD = {"zilver": "Zilver", "goud": "Goud", "roségoud": "Roségoud"}
 
@@ -76,8 +78,6 @@ def kleur(p):
         return "Zilver"
     if p["product_type"] == "Goud" or "on-gold" in img:
         return "Goud"
-    # Overige zonder metaaltag: de zwarte Halloween-charms (zwarte schakel,
-    # gecontroleerd op de productfoto's).
     return "Zwart"
 
 
@@ -125,251 +125,331 @@ def load(folder):
             "link": f"{SHOP}/products/{p['handle']}",
             "afbeelding": p["images"][0]["src"] if p["images"] else "",
         })
+    # De link is de sleutel waarmee afvinken over tabbladen heen wordt
+    # vergeleken (COUNTIF/MATCH); die mag dus geen jokertekens bevatten.
+    assert len({r["link"] for r in out}) == len(out), "links niet uniek"
+    assert not any(ch in r["link"] for r in out for ch in "*?~"), "jokerteken in link"
     return out
 
 
-# ---------- opmaak ----------
-# Villa for You thema: hoofdkleur #3CC3AF. Witte tekst op #3CC3AF haalt maar
-# 2,18:1 contrast, dus koppen krijgen donkere tekst (6,73:1). Titels en links
-# gebruiken een donkerdere tint van dezelfde kleur (6,08:1 op wit).
-VFY = "3CC3AF"        # hoofdkleur
-VFY_DARK = "1A6E63"   # donkere tint voor titels en links
-VFY_TINT = "E6F7F4"   # lichte tint voor totalen
-VFY_ZEBRA = "F4FBFA"  # zeer lichte tint voor om-en-om regels
-INK = "1F2A2E"        # tekstkleur op de hoofdkleur
-FONT = "Arial"
-F_BASE = Font(name=FONT, size=10, color=INK)
-F_HEAD = Font(name=FONT, size=10, bold=True, color=INK)
-F_TITLE = Font(name=FONT, size=16, bold=True, color=VFY_DARK)
-F_SUB = Font(name=FONT, size=11, bold=True, color=VFY_DARK)
-F_NOTE = Font(name=FONT, size=9, italic=True, color="555555")
-F_LINK = Font(name=FONT, size=10, color=VFY_DARK, underline="single")
-F_BOLD = Font(name=FONT, size=10, bold=True, color=INK)
-FILL_HEAD = PatternFill("solid", fgColor=VFY)
-FILL_TOTAL = PatternFill("solid", fgColor=VFY_TINT)
-FILL_ZEBRA = PatternFill("solid", fgColor=VFY_ZEBRA)
-COLOR_FILL = {
-    "Zilver": PatternFill("solid", fgColor="E6E8EB"),
-    "Goud": PatternFill("solid", fgColor="F6E7B8"),
-    "Roségoud": PatternFill("solid", fgColor="F4D6CC"),
-    "Zwart": PatternFill("solid", fgColor="BFBFBF"),
-    "Gemengd": PatternFill("solid", fgColor="DDEBF7"),
-}
-THIN = Side(style="thin", color="CFE3E0")
-BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-EURO = '€ #,##0.00'
-
-
-def header(ws, row, labels):
-    for c, label in enumerate(labels, 1):
-        cell = ws.cell(row=row, column=c, value=label)
-        cell.font = F_HEAD
-        cell.fill = FILL_HEAD
-        cell.alignment = Alignment(vertical="center", wrap_text=True)
-        cell.border = BORDER
-
-
-def widths(ws, ws_widths):
-    for i, w in enumerate(ws_widths, 1):
-        ws.column_dimensions[get_column_letter(i)].width = w
-
-
-def sort_key(r, theme=None):
-    t = theme if theme else r["themas"][0]
+def sort_key(r):
+    t = r["themas"][0]
     return (COLORS.index(r["kleur"]), TYPES.index(r["type"]),
             THEME_ORDER.index(t) if t in THEME_ORDER else 99, r["naam"].lower())
 
 
-def write_list(ws, rows, columns, row_fn, col_widths, color_col=None):
-    """Schrijft een tabel met kop, filter en vastgezette kop."""
-    header(ws, 1, columns)
-    for i, r in enumerate(rows, 2):
-        values = row_fn(r)
-        for c, (key, val) in enumerate(values, 1):
-            cell = ws.cell(row=i, column=c, value=val)
-            cell.font = F_BASE
-            cell.border = BORDER
-            if i % 2 == 1:
-                cell.fill = FILL_ZEBRA
-            if key in ("prijs", "van_prijs"):
-                cell.number_format = EURO
-            elif key == "link" and val:
-                cell.hyperlink = val
-                cell.font = F_LINK
-            elif key == "kleur" and val in COLOR_FILL:
-                cell.fill = COLOR_FILL[val]
-    ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(rows) + 1}"
-    widths(ws, col_widths)
-    ws.row_dimensions[1].height = 28
-    ws.sheet_properties.tabColor = VFY
+# ---------- opmaak ----------
+# Villa for You thema: hoofdkleur #3CC3AF. Witte tekst op #3CC3AF haalt maar
+# 2,18:1 contrast, dus koppen krijgen donkere tekst (6,73:1). Titels, links en
+# de kopjes van de invulkolommen gebruiken een donkere tint (wit erop: 6,08:1).
+VFY = "#3CC3AF"        # hoofdkleur
+VFY_DARK = "#1A6E63"   # donkere tint: titels, links, kop invulkolommen
+VFY_TINT = "#E6F7F4"   # lichte tint: totalen
+VFY_ZEBRA = "#F4FBFA"  # zeer lichte tint: om-en-om regels
+VFY_PICKED = "#C9EEE7"  # regel die je zelf hebt afgevinkt
+INK = "#1F2A2E"        # tekstkleur
+GRID = "#CFE3E0"       # randen
+COLOR_FILL = {"Zilver": "#E6E8EB", "Goud": "#F6E7B8", "Roségoud": "#F4D6CC",
+              "Zwart": "#BFBFBF", "Gemengd": "#DDEBF7"}
+EURO = "€ #,##0.00"
+
+
+class Formats:
+    """Maakt XlsxWriter-formats aan en hergebruikt identieke."""
+
+    BASE = {"font_name": "Arial", "font_size": 10, "font_color": INK, "valign": "vcenter"}
+
+    def __init__(self, wb):
+        self.wb = wb
+        self.cache = {}
+
+    def __call__(self, **props):
+        full = dict(self.BASE, **props)
+        key = tuple(sorted(full.items()))
+        if key not in self.cache:
+            self.cache[key] = self.wb.add_format(full)
+        return self.cache[key]
+
+    def cell(self, zebra=False, **props):
+        p = {"border": 1, "border_color": GRID}
+        if zebra:
+            p["bg_color"] = VFY_ZEBRA
+        p.update(props)
+        return self(**p)
+
+
+def q(sheet):
+    """Bladnaam veilig in een formule."""
+    return "'" + sheet.replace("'", "''") + "'"
+
+
+# ---------- lijstbladen ----------
+# Elke lijst begint met dezelfde drie kolommen, daarna de charmgegevens en
+# aan het eind drie verborgen hulpkolommen voor de status-formule.
+INPUT_COLS = [("Afvinken", 10), ("Gereserveerd door", 22), ("Status", 30)]
+HELPER_COLS = ["Sleutel (hulp)", "Aantal keer afgevinkt (hulp)", "Naam elders (hulp)"]
+
+COLUMNS = {
+    "kleur": ("Kleur", 11), "type": ("Type", 21), "themas": ("Thema('s)", 32),
+    "thema": ("Thema", 24), "naam": ("Naam", 50), "sku": ("SKU", 13),
+    "prijs": ("Prijs", 10), "van_prijs": ("Van-prijs", 10), "bestseller": ("Bestseller", 11),
+    "nieuw": ("Nieuw", 8), "voorraad": ("Op voorraad", 11), "link": ("Link", 58),
+    "afbeelding": ("Afbeelding (URL)", 58),
+}
+
+
+class ListSheet:
+    def __init__(self, title, rows, fields):
+        self.title = title
+        self.rows = rows            # lijst van (thema of None, charm-dict)
+        self.fields = fields
+        self.n = len(rows)
+        first_data = len(INPUT_COLS)
+        self.col = {f: first_data + i for i, f in enumerate(fields)}
+        self.last_visible = first_data + len(fields) - 1
+        self.key_col = self.last_visible + 1
+        self.tot_col = self.key_col + 1
+        self.name_col = self.tot_col + 1
+
+    def rng(self, col):
+        c = xl_col_to_name(col)
+        return f"{q(self.title)}!${c}$2:${c}${self.n + 1}"
 
 
 def build(folder, out_path):
     data = load(folder)
-    wb = Workbook()
-
-    # ---------- Alle charms ----------
-    ws_all = wb.active
-    ws_all.title = "Alle charms"
     all_rows = sorted(data, key=sort_key)
-    cols_all = ["Kleur", "Type", "Thema('s)", "Naam", "SKU", "Prijs", "Van-prijs",
-                "Bestseller", "Nieuw", "Op voorraad", "Link", "Afbeelding (URL)"]
-    write_list(
-        ws_all, all_rows, cols_all,
-        lambda r: [("kleur", r["kleur"]), ("type", r["type"]),
-                   ("themas", " / ".join(r["themas"])), ("naam", r["naam"]),
-                   ("sku", r["sku"]), ("prijs", r["prijs"]), ("van_prijs", r["van_prijs"]),
-                   ("bestseller", r["bestseller"]), ("nieuw", r["nieuw"]),
-                   ("voorraad", r["voorraad"]), ("link", r["link"]),
-                   ("afbeelding", r["afbeelding"])],
-        [11, 22, 34, 52, 14, 10, 10, 11, 8, 11, 60, 60],
-    )
 
-    # ---------- Per kleur ----------
-    cols_color = ["Type", "Thema('s)", "Naam", "SKU", "Prijs", "Bestseller",
-                  "Op voorraad", "Link"]
-    color_tabs = [("Zilver", ["Zilver"]), ("Goud", ["Goud"]), ("Roségoud", ["Roségoud"]),
-                  ("Zwart & mysteriebox", ["Zwart", "Gemengd"])]
-    for tab, kleuren in color_tabs:
-        ws = wb.create_sheet(tab)
-        rows = sorted([r for r in data if r["kleur"] in kleuren], key=sort_key)
-        write_list(
-            ws, rows, cols_color,
-            lambda r: [("type", r["type"]), ("themas", " / ".join(r["themas"])),
-                       ("naam", r["naam"]), ("sku", r["sku"]), ("prijs", r["prijs"]),
-                       ("bestseller", r["bestseller"]), ("voorraad", r["voorraad"]),
-                       ("link", r["link"])],
-            [22, 34, 52, 14, 10, 11, 11, 60],
-        )
-
-    # ---------- Per thema (een regel per charm per thema) ----------
-    ws_theme = wb.create_sheet("Per thema")
+    sheets = [ListSheet("Alle charms", [(None, r) for r in all_rows],
+                        ["kleur", "type", "themas", "naam", "sku", "prijs", "van_prijs",
+                         "bestseller", "nieuw", "voorraad", "link", "afbeelding"])]
+    color_fields = ["type", "themas", "naam", "sku", "prijs", "bestseller", "voorraad", "link"]
+    for tab, kleuren in [("Zilver", ["Zilver"]), ("Goud", ["Goud"]), ("Roségoud", ["Roségoud"]),
+                         ("Zwart & mysteriebox", ["Zwart", "Gemengd"])]:
+        sheets.append(ListSheet(tab, [(None, r) for r in all_rows if r["kleur"] in kleuren],
+                                color_fields))
     long_rows = [(t, r) for r in data for t in r["themas"]]
     long_rows.sort(key=lambda tr: (THEME_ORDER.index(tr[0]) if tr[0] in THEME_ORDER else 99,
                                    COLORS.index(tr[1]["kleur"]), TYPES.index(tr[1]["type"]),
                                    tr[1]["naam"].lower()))
-    cols_theme = ["Thema", "Kleur", "Type", "Naam", "SKU", "Prijs", "Op voorraad", "Link"]
-    write_list(
-        ws_theme, long_rows, cols_theme,
-        lambda tr: [("thema", tr[0]), ("kleur", tr[1]["kleur"]), ("type", tr[1]["type"]),
-                    ("naam", tr[1]["naam"]), ("sku", tr[1]["sku"]), ("prijs", tr[1]["prijs"]),
-                    ("voorraad", tr[1]["voorraad"]), ("link", tr[1]["link"])],
-        [26, 11, 22, 52, 14, 10, 11, 60],
-    )
+    sheets.append(ListSheet("Per thema", long_rows,
+                            ["thema", "kleur", "type", "naam", "sku", "prijs", "voorraad", "link"]))
+    by_title = {s.title: s for s in sheets}
 
-    # ---------- Overzicht (aantallen met formules) ----------
-    ws = wb.create_sheet("Overzicht", 0)
-    n_all = len(all_rows) + 1
-    n_long = len(long_rows) + 1
-    ws["A1"] = "Charms overzicht: Maak je armband (nl.charmsoff.com)"
-    ws["A1"].font = F_TITLE
-    ws["A2"] = (f"Bron: {COLLECTION_URL} (publieke productfeed), opgehaald op "
-                f"{datetime.date.today():%d-%m-%Y}. {len(data)} producten.")
-    ws["A2"].font = F_NOTE
+    wb = xlsxwriter.Workbook(out_path, {"strings_to_urls": False})
+    F = Formats(wb)
+    ws_ov = wb.add_worksheet("Overzicht")  # eerst aanmaken zodat het vooraan staat
 
-    # Tabel 1: kleur x type
-    r0 = 4
-    ws.cell(row=r0, column=1, value="Aantal charms per kleur en type").font = F_SUB
-    header(ws, r0 + 1, ["Kleur"] + TYPES + ["Totaal"])
-    rng_k = f"'Alle charms'!$A$2:$A${n_all}"
-    rng_t = f"'Alle charms'!$B$2:$B${n_all}"
+    for s in sheets:
+        write_list_sheet(wb, F, s, sheets)
+
+    write_overview(F, ws_ov, data, by_title["Alle charms"], by_title["Per thema"], long_rows)
+    wb.close()
+    return data
+
+
+def write_list_sheet(wb, F, s, sheets):
+    ws = wb.add_worksheet(s.title)
+    ws.set_tab_color(VFY)
+    ws.hide_gridlines(2)
+
+    head = F(bold=True, bg_color=VFY, text_wrap=True, border=1, border_color=GRID)
+    head_input = F(bold=True, bg_color=VFY_DARK, font_color="#FFFFFF", text_wrap=True,
+                   border=1, border_color=GRID)
+    head_helper = F(italic=True, font_color="#777777", bg_color="#EEEEEE", text_wrap=True)
+    ws.set_row(0, 30)
+    for c, (label, width) in enumerate(INPUT_COLS):
+        ws.write_string(0, c, label, head_input if c < 2 else head)
+        ws.set_column(c, c, width)
+    for f, c in s.col.items():
+        label, width = COLUMNS[f]
+        ws.write_string(0, c, label, head)
+        ws.set_column(c, c, width)
+    for i, label in enumerate(HELPER_COLS):
+        c = s.key_col + i
+        ws.write_string(0, c, label, head_helper)
+        ws.set_column(c, c, 14, None, {"hidden": True})
+
+    link_c = xl_col_to_name(s.col["link"])
+    key_c, tot_c, name_c = (xl_col_to_name(c) for c in (s.key_col, s.tot_col, s.name_col))
+
+    for i, (thema, r) in enumerate(s.rows):
+        row = i + 1          # 0-based rij in XlsxWriter
+        R = row + 1          # Excel-rijnummer
+        zebra = (R % 2 == 1)
+
+        # Invulkolommen
+        ws.insert_checkbox(row, 0, False,
+                           F.cell(zebra, checkbox=True, align="center"))
+        ws.write_blank(row, 1, None, F.cell(zebra))
+
+        # Gegevens
+        values = dict(r, thema=thema, themas=" / ".join(r["themas"]))
+        for f, c in s.col.items():
+            v = values[f]
+            if f in ("prijs", "van_prijs"):
+                if v is None:
+                    ws.write_blank(row, c, None, F.cell(zebra, num_format=EURO))
+                else:
+                    ws.write_number(row, c, v, F.cell(zebra, num_format=EURO))
+            elif f == "link":
+                ws.write_url(row, c, v, F.cell(zebra, font_color=VFY_DARK, underline=1), v)
+            elif f == "kleur":
+                ws.write_string(row, c, v, F.cell(bg_color=COLOR_FILL[v]))
+            else:
+                ws.write_string(row, c, v, F.cell(zebra))
+
+        # Hulpkolommen:
+        #   sleutel = link als deze regel is afgevinkt
+        #   aantal  = hoe vaak deze charm op alle bladen samen is afgevinkt
+        #   naam    = eerste naam bij een afgevinkte regel van deze charm
+        ws.write_formula(row, s.key_col, f'=IF($A{R}=TRUE,${link_c}{R},"")', None, "")
+        count = "+".join(f"COUNTIF({o.rng(o.key_col)},${link_c}{R})" for o in sheets)
+        ws.write_formula(row, s.tot_col, "=" + count, None, 0)
+        lookup = '""'
+        for o in reversed(sheets):
+            lookup = (f"IFERROR(INDEX({o.rng(1)},MATCH(${link_c}{R},{o.rng(o.key_col)},0))&\"\","
+                      f"{lookup})")
+        ws.write_formula(row, s.name_col, "=" + lookup, None, "")
+
+        # Status
+        status = (f'=IF(${tot_c}{R}-IF($A{R}=TRUE,1,0)<=0,"",'
+                  f'IF($A{R}=TRUE,"Let op: ook elders afgevinkt",'
+                  f'"Al gereserveerd"&IF(${name_c}{R}<>""," door "&${name_c}{R},"")))')
+        ws.write_formula(row, 2, status, F.cell(zebra, italic=True), "")
+
+    last = s.n
+    lv = s.last_visible
+    # Voorwaardelijke opmaak (eerste regel heeft voorrang)
+    ws.conditional_format(1, 2, last, 2, {
+        "type": "formula", "criteria": f"=AND($A2=TRUE,${tot_c}2>1)",
+        "format": wb.add_format({"bg_color": "#FCE4D6", "font_color": "#9C2A00", "bold": True})})
+    ws.conditional_format(1, 0, last, lv, {
+        "type": "formula", "criteria": "=$A2=TRUE",
+        "format": wb.add_format({"bg_color": VFY_PICKED})})
+    ws.conditional_format(1, 0, last, lv, {
+        "type": "formula", "criteria": f"=AND($A2<>TRUE,${tot_c}2>0)",
+        "format": wb.add_format({"bg_color": "#F2F2F2", "font_color": "#8C8C8C"})})
+
+    ws.freeze_panes(1, 0)
+    ws.autofilter(0, 0, last, lv)
+
+
+def write_overview(F, ws, data, s_all, s_theme, long_rows):
+    ws.set_tab_color(VFY_DARK)
+    ws.hide_gridlines(2)
+    widths = [26, 20, 20, 20, 22, 12, 14, 12]
+    for c, w in enumerate(widths):
+        ws.set_column(c, c, w)
+
+    title = F(bold=True, font_size=16, font_color=VFY_DARK)
+    sub = F(bold=True, font_size=11, font_color=VFY_DARK)
+    note = F(italic=True, font_size=9, font_color="#555555")
+    head = F(bold=True, bg_color=VFY, text_wrap=True, border=1, border_color=GRID)
+    num = F.cell()
+    bold_total = F.cell(bold=True, bg_color=VFY_TINT)
+    label_total = F.cell(bold=True, bg_color=VFY_TINT)
+
+    ws.write_string(0, 0, "Charms overzicht: Maak je armband (nl.charmsoff.com)", title)
+    ws.write_string(1, 0, f"Bron: {COLLECTION_URL} (publieke productfeed), opgehaald op "
+                          f"{datetime.date.today():%d-%m-%Y}. {len(data)} producten.", note)
+    ws.set_row(2, 4)
+    for c in range(len(widths)):
+        ws.write_blank(2, c, None, F(bg_color=VFY))
+
+    # Zo werkt afvinken
+    ws.write_string(3, 0, "Zo werkt afvinken", sub)
+    howto = [
+        "Zet op een tabblad een vinkje in 'Afvinken' en vul je naam in bij 'Gereserveerd door' "
+        "(de donkergroene kopjes zijn de invulkolommen).",
+        "Een charm staat op meerdere tabbladen. 'Status' laat automatisch zien als dezelfde charm "
+        "al ergens anders is afgevinkt, en door wie. Zo'n regel wordt grijs.",
+        "Twee keer afgevinkt? Dan staat er 'Let op: ook elders afgevinkt' in oranje.",
+        "Checkboxes werken in Microsoft 365 (Windows, Mac en Excel online). In oudere Excel-versies "
+        "staat er ONWAAR; typ dan WAAR om af te vinken.",
+    ]
+    for i, line in enumerate(howto):
+        ws.write_string(4 + i, 0, line, note)
+
+    # Tabel 1: kleur x type, met reserveringen
+    kt = collections.Counter((r["kleur"], r["type"]) for r in data)
+    kc = collections.Counter(r["kleur"] for r in data)
+    r0 = 9
+    ws.write_string(r0, 0, "Aantal charms per kleur en type", sub)
+    hdr = ["Kleur"] + TYPES + ["Totaal", "Gereserveerd", "Nog vrij"]
+    ws.set_row(r0 + 1, 30)
+    for c, label in enumerate(hdr):
+        ws.write_string(r0 + 1, c, label, head)
+    rng_k = s_all.rng(s_all.col["kleur"])
+    rng_t = s_all.rng(s_all.col["type"])
+    rng_res = s_all.rng(s_all.tot_col)
+    nt = len(TYPES)
     for i, k in enumerate(COLORS):
         row = r0 + 2 + i
-        c = ws.cell(row=row, column=1, value=k)
-        c.font = F_BOLD
-        c.fill = COLOR_FILL[k]
-        c.border = BORDER
-        for j, _t in enumerate(TYPES):
-            col = 2 + j
-            tl = get_column_letter(col)
-            cell = ws.cell(row=row, column=col,
-                           value=f"=COUNTIFS({rng_k},$A{row},{rng_t},{tl}${r0 + 1})")
-            cell.font = F_BASE
-            cell.border = BORDER
-        last = get_column_letter(1 + len(TYPES))
-        cell = ws.cell(row=row, column=2 + len(TYPES), value=f"=SUM(B{row}:{last}{row})")
-        cell.font = F_BOLD
-        cell.border = BORDER
-        cell.fill = FILL_TOTAL
+        R = row + 1
+        ws.write_string(row, 0, k, F.cell(bold=True, bg_color=COLOR_FILL[k]))
+        for j, t in enumerate(TYPES):
+            hc = xl_col_to_name(1 + j)
+            ws.write_formula(row, 1 + j, f"=COUNTIFS({rng_k},$A{R},{rng_t},{hc}${r0 + 2})",
+                             num, kt[(k, t)])
+        last_t = xl_col_to_name(nt)
+        tot_c = xl_col_to_name(1 + nt)
+        res_c = xl_col_to_name(2 + nt)
+        ws.write_formula(row, 1 + nt, f"=SUM(B{R}:{last_t}{R})", bold_total, kc[k])
+        ws.write_formula(row, 2 + nt, f'=COUNTIFS({rng_k},$A{R},{rng_res},">0")', num, 0)
+        ws.write_formula(row, 3 + nt, f"={tot_c}{R}-{res_c}{R}", bold_total, kc[k])
     tot_row = r0 + 2 + len(COLORS)
-    ws.cell(row=tot_row, column=1, value="Totaal").font = F_BOLD
-    for col in range(1, 3 + len(TYPES)):
-        cell = ws.cell(row=tot_row, column=col)
-        if col > 1:
-            cl = get_column_letter(col)
-            cell.value = f"=SUM({cl}{r0 + 2}:{cl}{tot_row - 1})"
-        cell.font = F_BOLD
-        cell.fill = FILL_TOTAL
-        cell.border = BORDER
+    ws.write_string(tot_row, 0, "Totaal", label_total)
+    col_sums = [sum(kt[(k, t)] for k in COLORS) for t in TYPES] + [len(data), 0, len(data)]
+    for c in range(1, len(hdr)):
+        cl = xl_col_to_name(c)
+        ws.write_formula(tot_row, c, f"=SUM({cl}{r0 + 3}:{cl}{tot_row})", bold_total,
+                         col_sums[c - 1])
 
     # Tabel 2: thema x kleur
+    tk = collections.Counter((t, r["kleur"]) for t, r in long_rows)
+    tc = collections.Counter(t for t, _ in long_rows)
     r1 = tot_row + 3
-    ws.cell(row=r1, column=1, value="Aantal charms per thema en kleur").font = F_SUB
-    ws.cell(row=r1, column=4,
-            value="Let op: een charm kan in meer thema's vallen, dus het totaal hier is "
-                  "hoger dan het aantal charms.").font = F_NOTE
-    header(ws, r1 + 1, ["Thema"] + COLORS + ["Totaal"])
-    rng_th = f"'Per thema'!$A$2:$A${n_long}"
-    rng_tk = f"'Per thema'!$B$2:$B${n_long}"
-    themes_present = [t for t in THEME_ORDER if any(t == tr[0] for tr in long_rows)]
+    ws.write_string(r1, 0, "Aantal charms per thema en kleur", sub)
+    ws.write_string(r1, 3, "Let op: een charm kan in meer thema's vallen, dus het totaal hier "
+                           "is hoger dan het aantal charms.", note)
+    hdr2 = ["Thema"] + COLORS + ["Totaal"]
+    for c, label in enumerate(hdr2):
+        fmt = head
+        if label in COLOR_FILL:
+            fmt = F(bold=True, bg_color=COLOR_FILL[label], border=1, border_color=GRID)
+        ws.write_string(r1 + 1, c, label, fmt)
+    rng_th = s_theme.rng(s_theme.col["thema"])
+    rng_tk = s_theme.rng(s_theme.col["kleur"])
+    themes_present = [t for t in THEME_ORDER if tc[t]]
     for i, t in enumerate(themes_present):
         row = r1 + 2 + i
-        c = ws.cell(row=row, column=1, value=t)
-        c.font = F_BOLD
-        c.border = BORDER
-        for j, _k in enumerate(COLORS):
-            col = 2 + j
-            kl = get_column_letter(col)
-            cell = ws.cell(row=row, column=col,
-                           value=f"=COUNTIFS({rng_th},$A{row},{rng_tk},{kl}${r1 + 1})")
-            cell.font = F_BASE
-            cell.border = BORDER
-        last = get_column_letter(1 + len(COLORS))
-        cell = ws.cell(row=row, column=2 + len(COLORS), value=f"=SUM(B{row}:{last}{row})")
-        cell.font = F_BOLD
-        cell.border = BORDER
-        cell.fill = FILL_TOTAL
-    for j, k in enumerate(COLORS):
-        hc = ws.cell(row=r1 + 1, column=2 + j)
-        hc.fill = COLOR_FILL[k]
-        hc.font = F_BOLD
+        R = row + 1
+        ws.write_string(row, 0, t, F.cell(bold=True))
+        for j, k in enumerate(COLORS):
+            hc = xl_col_to_name(1 + j)
+            ws.write_formula(row, 1 + j, f"=COUNTIFS({rng_th},$A{R},{rng_tk},{hc}${r1 + 2})",
+                             num, tk[(t, k)])
+        last_k = xl_col_to_name(len(COLORS))
+        ws.write_formula(row, 1 + len(COLORS), f"=SUM(B{R}:{last_k}{R})", bold_total, tc[t])
 
     # Toelichting
     r2 = r1 + 3 + len(themes_present)
     notes = [
-        "Toelichting",
-        "Kleur = metaalkleur van de schakel. Bepaald zoals de armbandbouwer op de site doet "
-        "(tag 'Silver' gaat voor 'gold'), met Roségoud en Zwart als eigen kleur. Voorbeeld: "
-        "'Letter A in goud met stenen, op Zilver' telt als Zilver.",
-        "Zwart = de Halloween-charms op een zwarte schakel (geen metaaltag in de shop; "
-        "gecontroleerd op de productfoto's). Gemengd = mysteryboxen.",
+        "Kleur = metaalkleur van de schakel. 'Op zilver/goud/roségoud' in de productnaam weegt "
+        "het zwaarst, daarna de shop-tags. Voorbeeld: 'Letter A in goud met stenen, op Zilver' "
+        "telt als Zilver.",
+        "Zwart = de Halloween-charms op een zwarte schakel (gecontroleerd op de productfoto's). "
+        "Gemengd = mysteryboxen.",
         "Type = 'Klassieke link-bedel' of 'Hangende bedel' (zo noemt de site het), plus "
-        "'Dubbele bedel' (dubbele breedte) en 'Dubbel verbonden bedel' (twee gekoppelde "
-        "bedels) op basis van de shop-tags 'double' en 'linked'.",
-        "Thema = de categorieën uit de armbandbouwer (Engelse shop-tags vertaald naar het "
-        "Nederlands). Bestseller = tag 'best-seller-top60'.",
-        "Tabbladen per kleur zijn gesorteerd op type, daarna thema en naam. Het tabblad "
-        "'Alle charms' heeft filters op elke kolom.",
+        "'Dubbele bedel' (dubbele breedte) en 'Dubbel verbonden bedel' (twee gekoppelde bedels).",
+        "Thema = de categorieën uit de armbandbouwer. Bestseller = tag 'best-seller-top60'.",
+        "Gereserveerd = aantal charms dat op minstens één tabblad is afgevinkt (elke charm telt "
+        "één keer).",
     ]
+    ws.write_string(r2, 0, "Toelichting", sub)
     for i, n in enumerate(notes):
-        c = ws.cell(row=r2 + i, column=1, value=n)
-        c.font = F_SUB if i == 0 else F_NOTE
-
-    widths(ws, [26, 20, 20, 20, 22, 12, 12])
-    for row in ws.iter_rows(min_row=r0 + 1, max_row=r0 + 1):
-        for c in row:
-            c.alignment = Alignment(wrap_text=True, vertical="center")
-    ws.row_dimensions[r0 + 1].height = 30
-    ws.sheet_view.showGridLines = False
-    ws.sheet_properties.tabColor = VFY_DARK
-    # Accentbalk in de hoofdkleur onder de titel
-    for col in range(1, 8):
-        ws.cell(row=3, column=col).fill = FILL_HEAD
-    ws.row_dimensions[3].height = 4
-
-    wb.save(out_path)
-    return data
+        ws.write_string(r2 + 1 + i, 0, n, note)
 
 
 if __name__ == "__main__":
