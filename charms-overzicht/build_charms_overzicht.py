@@ -129,16 +129,25 @@ def load(folder):
 
 
 # ---------- opmaak ----------
+# Villa for You thema: hoofdkleur #3CC3AF. Witte tekst op #3CC3AF haalt maar
+# 2,18:1 contrast, dus koppen krijgen donkere tekst (6,73:1). Titels en links
+# gebruiken een donkerdere tint van dezelfde kleur (6,08:1 op wit).
+VFY = "3CC3AF"        # hoofdkleur
+VFY_DARK = "1A6E63"   # donkere tint voor titels en links
+VFY_TINT = "E6F7F4"   # lichte tint voor totalen
+VFY_ZEBRA = "F4FBFA"  # zeer lichte tint voor om-en-om regels
+INK = "1F2A2E"        # tekstkleur op de hoofdkleur
 FONT = "Arial"
-F_BASE = Font(name=FONT, size=10)
-F_HEAD = Font(name=FONT, size=10, bold=True, color="FFFFFF")
-F_TITLE = Font(name=FONT, size=14, bold=True)
-F_SUB = Font(name=FONT, size=11, bold=True)
+F_BASE = Font(name=FONT, size=10, color=INK)
+F_HEAD = Font(name=FONT, size=10, bold=True, color=INK)
+F_TITLE = Font(name=FONT, size=16, bold=True, color=VFY_DARK)
+F_SUB = Font(name=FONT, size=11, bold=True, color=VFY_DARK)
 F_NOTE = Font(name=FONT, size=9, italic=True, color="555555")
-F_LINK = Font(name=FONT, size=10, color="0563C1", underline="single")
-F_BOLD = Font(name=FONT, size=10, bold=True)
-FILL_HEAD = PatternFill("solid", fgColor="3A3F44")
-FILL_TOTAL = PatternFill("solid", fgColor="E8E8E8")
+F_LINK = Font(name=FONT, size=10, color=VFY_DARK, underline="single")
+F_BOLD = Font(name=FONT, size=10, bold=True, color=INK)
+FILL_HEAD = PatternFill("solid", fgColor=VFY)
+FILL_TOTAL = PatternFill("solid", fgColor=VFY_TINT)
+FILL_ZEBRA = PatternFill("solid", fgColor=VFY_ZEBRA)
 COLOR_FILL = {
     "Zilver": PatternFill("solid", fgColor="E6E8EB"),
     "Goud": PatternFill("solid", fgColor="F6E7B8"),
@@ -146,7 +155,7 @@ COLOR_FILL = {
     "Zwart": PatternFill("solid", fgColor="BFBFBF"),
     "Gemengd": PatternFill("solid", fgColor="DDEBF7"),
 }
-THIN = Side(style="thin", color="BFBFBF")
+THIN = Side(style="thin", color="CFE3E0")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 EURO = '€ #,##0.00'
 
@@ -180,6 +189,8 @@ def write_list(ws, rows, columns, row_fn, col_widths, color_col=None):
             cell = ws.cell(row=i, column=c, value=val)
             cell.font = F_BASE
             cell.border = BORDER
+            if i % 2 == 1:
+                cell.fill = FILL_ZEBRA
             if key in ("prijs", "van_prijs"):
                 cell.number_format = EURO
             elif key == "link" and val:
@@ -191,6 +202,7 @@ def write_list(ws, rows, columns, row_fn, col_widths, color_col=None):
     ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(rows) + 1}"
     widths(ws, col_widths)
     ws.row_dimensions[1].height = 28
+    ws.sheet_properties.tabColor = VFY
 
 
 def build(folder, out_path):
@@ -350,6 +362,11 @@ def build(folder, out_path):
             c.alignment = Alignment(wrap_text=True, vertical="center")
     ws.row_dimensions[r0 + 1].height = 30
     ws.sheet_view.showGridLines = False
+    ws.sheet_properties.tabColor = VFY_DARK
+    # Accentbalk in de hoofdkleur onder de titel
+    for col in range(1, 8):
+        ws.cell(row=3, column=col).fill = FILL_HEAD
+    ws.row_dimensions[3].height = 4
 
     wb.save(out_path)
     return data
